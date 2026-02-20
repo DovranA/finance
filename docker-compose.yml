@@ -133,5 +133,34 @@ services:
     deploy:
       replicas: 2 # Safe with FOR UPDATE SKIP LOCKED
 
+  # ── Outbox Relay Worker (Transactional Outbox) ───────────
+  outbox-relay:
+    build: .
+    command: [ "python", "-m", "app.workers.outbox_relay" ]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: finance_db
+      POSTGRES_USER: finance_user
+      POSTGRES_PASSWORD: finance_secret
+      POSTGRES_POOL_MIN: 2
+      POSTGRES_POOL_MAX: 10
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      OUTBOX_POLL_INTERVAL: 1.0
+      OUTBOX_BATCH_SIZE: 200
+      OUTBOX_CLEANUP_DAYS: 7
+      APP_LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2 # Safe with FOR UPDATE SKIP LOCKED
+
 volumes:
   pgdata:

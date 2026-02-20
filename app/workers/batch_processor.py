@@ -17,6 +17,7 @@ from app.infrastructure.db.repositories.account_repo_impl import PgAccountReposi
 from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerRepository
 from app.infrastructure.db.repositories.reward_batch_repo_impl import PgRewardBatchRepository
 from app.infrastructure.db.repositories.treasury_repo_impl import PgTreasuryRepository
+from app.infrastructure.db.repositories.outbox_repo_impl import PgOutboxRepository
 from app.infrastructure.redis.cache import CacheService
 from app.infrastructure.redis.client import create_redis_pool, close_redis
 from app.usecases.process_reward_batch import ProcessRewardBatchUseCase
@@ -48,6 +49,7 @@ async def main() -> None:
         ledger_repo=PgLedgerRepository(),
         reward_batch_repo=PgRewardBatchRepository(),
         treasury_repo=PgTreasuryRepository(),
+        outbox_repo=PgOutboxRepository(),
         cache=cache,
     )
 

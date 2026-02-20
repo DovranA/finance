@@ -1,4 +1,4 @@
-"""Process Reward Event Use Case — core action flow.
+"""Process Reward Event Use Case — core action flow with Transactional Outbox.
 
 Full flow:
 1) Idempotency check (Redis short-TTL + DB)
@@ -6,8 +6,9 @@ Full flow:
 3) Create actor_action record
 4) If actor_reward > 0: create ledger entry for actor, update balance
 5) Upsert publisher reward into reward_batches
-6) Mark event as processed (DB + Redis)
-7) Commit transaction
+6) Write outbox message (same transaction) for downstream consumers
+7) Mark event as processed (DB + Redis)
+8) Commit transaction — outbox relay publishes later
 """
 
 from __future__ import annotations
@@ -17,10 +18,12 @@ import uuid
 from asyncpg import Pool
 
 from app.core.logging import get_logger
+from app.domain.entities.outbox_message import OutboxMessage
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.actor_action_repo import ActorActionRepository
 from app.domain.repositories.economic_action_repo import EconomicActionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
+from app.domain.repositories.outbox_repo import OutboxRepository
 from app.domain.repositories.processed_event_repo import ProcessedEventRepository
 from app.domain.repositories.reward_batch_repo import RewardBatchRepository
 from app.domain.services.reward_engine import RewardEngine
@@ -43,6 +46,7 @@ class ProcessRewardEventUseCase:
         economic_action_repo: EconomicActionRepository,
         reward_batch_repo: RewardBatchRepository,
         processed_event_repo: ProcessedEventRepository,
+        outbox_repo: OutboxRepository,
         cache: CacheService | None = None,
     ) -> None:
         self._pool = pool
@@ -52,6 +56,7 @@ class ProcessRewardEventUseCase:
         self._economic_action_repo = economic_action_repo
         self._reward_batch_repo = reward_batch_repo
         self._processed_event_repo = processed_event_repo
+        self._outbox_repo = outbox_repo
         self._cache = cache
 
     async def execute(self, event: RewardEvent) -> None:
@@ -122,12 +127,29 @@ class ProcessRewardEventUseCase:
                 conn=conn,
             )
 
-            # ── 9. Mark event processed (DB) ────────────
+            # ── 9. Write outbox message (same transaction) ──
+            outbox_msg = OutboxMessage.create(
+                aggregate_type="reward_event",
+                aggregate_id=event.event_id,
+                event_type=f"reward.{event.action_code}.processed",
+                payload={
+                    "event_id": str(event.event_id),
+                    "actor_id": str(event.actor_id),
+                    "publisher_id": str(event.publisher_id),
+                    "content_id": str(event.content_id),
+                    "action_code": event.action_code,
+                    "actor_reward": config.actor_reward,
+                    "publisher_reward": config.publisher_reward,
+                },
+            )
+            await self._outbox_repo.insert(outbox_msg, conn)
+
+            # ── 10. Mark event processed (DB) ────────────
             await self._processed_event_repo.mark_processed(
                 event.event_id, event.action_code, conn
             )
 
-        # ── 10. Mark event processed (Redis, outside tx) ─
+        # ── 11. Mark event processed (Redis, outside tx) ─
         if self._cache:
             await self._cache.mark_event_processed(event.event_id)
 

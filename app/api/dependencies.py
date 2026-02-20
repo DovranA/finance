@@ -15,6 +15,7 @@ from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerReposito
 from app.infrastructure.db.repositories.processed_event_repo_impl import PgProcessedEventRepository
 from app.infrastructure.db.repositories.reward_batch_repo_impl import PgRewardBatchRepository
 from app.infrastructure.db.repositories.treasury_repo_impl import PgTreasuryRepository
+from app.infrastructure.db.repositories.outbox_repo_impl import PgOutboxRepository
 from app.infrastructure.redis.cache import CacheService
 from app.usecases.admin_actions import (
     ActivateEconomicVersionUseCase,
@@ -63,6 +64,11 @@ def get_processed_event_repo() -> PgProcessedEventRepository:
 @lru_cache(maxsize=1)
 def get_treasury_repo() -> PgTreasuryRepository:
     return PgTreasuryRepository()
+
+
+@lru_cache(maxsize=1)
+def get_outbox_repo() -> PgOutboxRepository:
+    return PgOutboxRepository()
 
 
 # ── Use case factories ──────────────────────────────────────
@@ -130,6 +136,7 @@ def get_process_reward_event_uc(request: Request) -> ProcessRewardEventUseCase:
         economic_action_repo=get_economic_action_repo(),
         reward_batch_repo=get_reward_batch_repo(),
         processed_event_repo=get_processed_event_repo(),
+        outbox_repo=get_outbox_repo(),
         cache=get_cache(request),
     )
 
@@ -141,5 +148,6 @@ def get_process_reward_batch_uc(request: Request) -> ProcessRewardBatchUseCase:
         ledger_repo=get_ledger_repo(),
         reward_batch_repo=get_reward_batch_repo(),
         treasury_repo=get_treasury_repo(),
+        outbox_repo=get_outbox_repo(),
         cache=get_cache(request),
     )

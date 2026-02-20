@@ -76,6 +76,15 @@ class BatchSettings(BaseSettings):
     interval_seconds: int = 5
 
 
+class OutboxSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="OUTBOX_")
+
+    poll_interval: float = 1.0          # seconds between relay polls
+    batch_size: int = 200               # max messages per poll cycle
+    cleanup_days: int = 7               # delete sent messages older than N days
+    cleanup_interval: int = 3600        # seconds between cleanup runs
+
+
 class Settings:
     """Aggregated application settings."""
 
@@ -85,6 +94,7 @@ class Settings:
         self.redis = RedisSettings()
         self.app = AppSettings()
         self.batch = BatchSettings()
+        self.outbox = OutboxSettings()
 
 
 def get_settings() -> Settings:

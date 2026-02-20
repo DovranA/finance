@@ -15,6 +15,7 @@ from app.infrastructure.db.repositories.economic_action_repo_impl import PgEcono
 from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerRepository
 from app.infrastructure.db.repositories.processed_event_repo_impl import PgProcessedEventRepository
 from app.infrastructure.db.repositories.reward_batch_repo_impl import PgRewardBatchRepository
+from app.infrastructure.db.repositories.outbox_repo_impl import PgOutboxRepository
 from app.infrastructure.rabbitmq.connection import (
     create_connection,
     create_channel,
@@ -62,6 +63,7 @@ async def main() -> None:
         economic_action_repo=PgEconomicActionRepository(),
         reward_batch_repo=PgRewardBatchRepository(),
         processed_event_repo=PgProcessedEventRepository(),
+        outbox_repo=PgOutboxRepository(),
         cache=cache,
     )
 

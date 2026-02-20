@@ -1,4 +1,4 @@
-"""Process Reward Batch Use Case — batch processor.
+"""Process Reward Batch Use Case — batch processor with Transactional Outbox.
 
 Flow:
 1) Select unprocessed reward_batches FOR UPDATE SKIP LOCKED
@@ -8,7 +8,8 @@ Flow:
    c) Credit publisher balance atomically
    d) Credit treasury account
    e) Credit platform_fee account
-   f) Mark batch processed
+   f) Write outbox message (same transaction)
+   g) Mark batch processed
 All inside a single DB transaction.
 """
 
@@ -18,8 +19,10 @@ from asyncpg import Pool
 
 from app.core.logging import get_logger
 from app.domain.entities.ledger_entry import LedgerEntry
+from app.domain.entities.outbox_message import OutboxMessage
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
+from app.domain.repositories.outbox_repo import OutboxRepository
 from app.domain.repositories.reward_batch_repo import RewardBatchRepository
 from app.domain.value_objects.enums import EntryType, TreasuryAccountType
 from app.infrastructure.db.repositories.treasury_repo_impl import PgTreasuryRepository
@@ -39,6 +42,7 @@ class ProcessRewardBatchUseCase:
         ledger_repo: LedgerRepository,
         reward_batch_repo: RewardBatchRepository,
         treasury_repo: PgTreasuryRepository,
+        outbox_repo: OutboxRepository,
         cache: CacheService | None = None,
     ) -> None:
         self._pool = pool
@@ -46,6 +50,7 @@ class ProcessRewardBatchUseCase:
         self._ledger_repo = ledger_repo
         self._reward_batch_repo = reward_batch_repo
         self._treasury_repo = treasury_repo
+        self._outbox_repo = outbox_repo
         self._cache = cache
 
     async def execute(self, batch_size: int = 500) -> int:
@@ -129,7 +134,25 @@ class ProcessRewardBatchUseCase:
                     )
                     await self._ledger_repo.append(treasury_entry, conn)
 
-                # ── 4. Mark processed ────────────────────
+                # ── 4. Write outbox message (same transaction) ──
+                outbox_msg = OutboxMessage.create(
+                    aggregate_type="batch_processed",
+                    aggregate_id=batch.id,
+                    event_type=f"batch.{batch.action_code}.processed",
+                    payload={
+                        "batch_id": str(batch.id),
+                        "publisher_id": str(batch.publisher_id),
+                        "content_id": str(batch.content_id),
+                        "action_code": batch.action_code,
+                        "action_count": batch.action_count,
+                        "publisher_reward": batch.total_publisher_reward,
+                        "platform_fee": batch.total_platform_fee,
+                        "treasury_cut": batch.total_treasury_cut,
+                    },
+                )
+                await self._outbox_repo.insert(outbox_msg, conn)
+
+                # ── 5. Mark processed ────────────────────
                 await self._reward_batch_repo.mark_processed(batch.id, conn)
                 processed_count += 1
 
