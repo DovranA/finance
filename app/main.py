@@ -58,7 +58,7 @@ def create_app() -> FastAPI:
     )
 
     # ── Register routers ─────────────────────────────────
-    app.include_router(admin.router)
+    # app.include_router(admin.router)
     app.include_router(accounts.router)
 
     @app.get("/health", response_model=HealthResponse, tags=["Health"])
