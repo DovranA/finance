@@ -5,6 +5,7 @@ aio-pika==9.5.4
 redis[hiredis]==5.2.1
 pydantic==2.10.4
 pydantic-settings==2.7.1
+dishka==1.4.2
 orjson==3.10.14
 structlog==24.4.0
 httptools==0.6.4

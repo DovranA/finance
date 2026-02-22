@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
+from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
-from app.api.dependencies import (
-    get_activate_version_uc,
-    get_create_action_uc,
-    get_create_version_uc,
-    get_disable_action_uc,
-    get_list_actions_uc,
-)
 from app.api.schemas.schemas import (
     ActionResponse,
     ActivateVersionRequest,
@@ -28,13 +23,13 @@ from app.usecases.admin_actions import (
     ListEconomicActionsUseCase,
 )
 
-router = APIRouter(prefix="/admin/actions", tags=["Admin"])
+router = APIRouter(prefix="/admin/actions", tags=["Admin"], route_class=DishkaRoute)
 
 
 @router.post("", response_model=ActionResponse, status_code=201)
 async def create_action(
     body: CreateActionRequest,
-    uc: CreateEconomicActionUseCase = Depends(get_create_action_uc),
+    uc: FromDishka[CreateEconomicActionUseCase],
 ):
     """Create a new dynamic action type."""
     try:
@@ -50,11 +45,13 @@ async def create_action(
     )
 
 
-@router.post("/{action_id}/new-version", response_model=VersionResponse, status_code=201)
+@router.post(
+    "/{action_id}/new-version", response_model=VersionResponse, status_code=201
+)
 async def create_version(
     action_id: uuid.UUID,
     body: CreateVersionRequest,
-    uc: CreateEconomicVersionUseCase = Depends(get_create_version_uc),
+    uc: FromDishka[CreateEconomicVersionUseCase],
 ):
     """Create a new reward version for an action."""
     try:
@@ -83,7 +80,7 @@ async def create_version(
 async def activate_version(
     action_id: uuid.UUID,
     body: ActivateVersionRequest,
-    uc: ActivateEconomicVersionUseCase = Depends(get_activate_version_uc),
+    uc: FromDishka[ActivateEconomicVersionUseCase],
 ):
     """Activate a specific version (deactivates all others for this action)."""
     try:
@@ -94,7 +91,7 @@ async def activate_version(
 
 @router.get("")
 async def list_actions(
-    uc: ListEconomicActionsUseCase = Depends(get_list_actions_uc),
+    uc: FromDishka[ListEconomicActionsUseCase],
 ):
     """List all economic actions with their versions."""
     return await uc.execute()
@@ -103,7 +100,7 @@ async def list_actions(
 @router.patch("/{action_id}/disable", status_code=204)
 async def disable_action(
     action_id: uuid.UUID,
-    uc: DisableEconomicActionUseCase = Depends(get_disable_action_uc),
+    uc: FromDishka[DisableEconomicActionUseCase],
 ):
     """Disable an economic action."""
     try:
