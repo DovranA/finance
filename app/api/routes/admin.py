@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
 
 from fastapi import APIRouter, HTTPException
 from dishka.integrations.fastapi import FromDishka, DishkaRoute

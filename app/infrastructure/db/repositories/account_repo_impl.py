@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import uuid
-
+from app.core.logging import get_logger
 from asyncpg import Connection
 
 from app.domain.entities.account import Account
 from app.domain.repositories.account_repo import AccountRepository
+
+logger = get_logger(__name__)
 
 
 class PgAccountRepository(AccountRepository):
@@ -62,17 +64,21 @@ class PgAccountRepository(AccountRepository):
         )
 
     async def create(self, account: Account, conn: Connection) -> None:
-        await conn.execute(
-            "INSERT INTO accounts (id, user_id, balance, currency, is_active, created_at, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
-            account.id,
-            account.user_id,
-            account.balance,
-            account.currency,
-            account.is_active,
-            account.created_at,
-            account.updated_at,
-        )
+        try:
+            await conn.execute(
+                "INSERT INTO accounts (user_id, balance, currency, is_active, created_at, updated_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
+                account.user_id,
+                account.balance,
+                account.currency,
+                account.is_active,
+                account.created_at,
+                account.updated_at,
+            )
+        except Exception as e:
+            # Log the error with more context
+            logger.error(f"Failed to create account for user_id={account.user_id}: {e}")
+            raise
 
     @staticmethod
     def _to_entity(row) -> Account:

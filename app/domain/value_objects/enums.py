@@ -9,6 +9,7 @@ class Currency(StrEnum):
     USD = "USD"
     EUR = "EUR"
     RUB = "RUB"
+    TMT = "TMT"
 
 
 class EntryType(StrEnum):
@@ -29,6 +30,6 @@ class TreasuryAccountType(StrEnum):
     TREASURY = "treasury"
 
 
-class LedgerEntryType(str, StrEnum):
+class LedgerEntryType(StrEnum):
     CREDIT = "credit"
     DEBIT = "debit"

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from dishka.integrations.fastapi import setup_dishka
 
-from app.api.routes import accounts, admin
+from app.api.routes import accounts, admin, test
 from app.api.schemas.schemas import HealthResponse
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
@@ -32,6 +32,7 @@ def create_app() -> FastAPI:
     # ── Register routers ─────────────────────────────────
     # app.include_router(admin.router)
     app.include_router(accounts.router)
+    app.include_router(test.router)
 
     @app.get("/health", response_model=HealthResponse, tags=["Health"])
     async def health_check():

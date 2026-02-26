@@ -7,6 +7,7 @@ import uuid
 from asyncpg import Pool
 
 from app.core.logging import get_logger
+from app.domain.entities.account import Account
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.value_objects.enums import Currency
 from app.infrastructure.db.transaction import transaction
@@ -15,7 +16,7 @@ from app.infrastructure.redis.cache import CacheService
 logger = get_logger(__name__)
 
 
-class GetBalanceUseCase:
+class CreateBalanceUseCase:
     """Retrieve account balance for a user, using Redis cache when available."""
 
     def __init__(
@@ -29,33 +30,14 @@ class GetBalanceUseCase:
         self._cache = cache
 
     async def execute(self, user_id: uuid.UUID) -> dict:
-        # Try cache first
         async with transaction(self._pool) as conn:
             account = await self._account_repo.get_by_user_id(user_id, conn)
 
-        if account is None:
-            return {
-                "user_id": str(user_id),
-                "balance": 0,
-                "currency": Currency.TMT,
-                "found": False,
-            }
+            if account is None:
+                account = Account.create(user_id=user_id, currency=Currency.TMT)
+                await self._account_repo.create(account, conn)
 
-        # Check cache
-        if self._cache:
-            cached = await self._cache.get_cached_balance(account.id)
-            if cached is not None:
-                logger.debug("balance_cache_hit", user_id=str(user_id))
-                return {
-                    "user_id": str(user_id),
-                    "account_id": str(account.id),
-                    "balance": cached,
-                    "currency": account.currency,
-                    "found": True,
-                    "cached": True,
-                }
-
-        # Set cache
+        # 🔹 здесь conn уже НЕ нужен — можно кешировать
         if self._cache:
             await self._cache.set_cached_balance(account.id, account.balance)
 

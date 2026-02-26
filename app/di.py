@@ -44,6 +44,7 @@ from app.usecases.admin_actions import (
     ListEconomicActionsUseCase,
 )
 from app.usecases.get_balance import GetBalanceUseCase
+from app.usecases.create_balance import CreateBalanceUseCase
 from app.usecases.process_reward_batch import ProcessRewardBatchUseCase
 from app.usecases.process_reward_event import ProcessRewardEventUseCase
 
@@ -140,6 +141,19 @@ class UseCaseProvider(Provider):
         cache: CacheService | None,
     ) -> GetBalanceUseCase:
         return GetBalanceUseCase(
+            pool=pool,
+            account_repo=account_repo,
+            cache=cache,
+        )
+
+    @provide
+    def create_balance_uc(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+        cache: CacheService | None,
+    ) -> CreateBalanceUseCase:
+        return CreateBalanceUseCase(
             pool=pool,
             account_repo=account_repo,
             cache=cache,

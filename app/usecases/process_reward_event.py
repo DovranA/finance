@@ -13,8 +13,6 @@ Full flow:
 
 from __future__ import annotations
 
-import uuid
-
 from asyncpg import Pool
 
 from app.core.logging import get_logger
@@ -63,7 +61,9 @@ class ProcessRewardEventUseCase:
         # ── 1. Quick Redis idempotency check ─────────────
         if self._cache:
             if await self._cache.is_event_processed(event.event_id):
-                logger.info("event_already_processed_cache", event_id=str(event.event_id))
+                logger.info(
+                    "event_already_processed_cache", event_id=str(event.event_id)
+                )
                 return
 
         async with transaction(self._pool) as conn:
