@@ -18,7 +18,7 @@ class Account:
     id: uuid.UUID
     user_id: uuid.UUID
     balance: int
-    currency: str = "USD"
+    currency: str = "TENNE"
     is_active: bool = True
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -33,14 +33,12 @@ class Account:
         if amount <= 0:
             raise ValueError(f"Debit amount must be positive, got {amount}")
         if self.balance < amount:
-            raise ValueError(
-                f"Insufficient balance: {self.balance} < {amount}"
-            )
+            raise ValueError(f"Insufficient balance: {self.balance} < {amount}")
         self.balance -= amount
         self.updated_at = datetime.now(timezone.utc)
 
     @classmethod
-    def create(cls, user_id: uuid.UUID, currency: str = "USD") -> Account:
+    def create(cls, user_id: uuid.UUID, currency: str = "TENNE") -> Account:
         return cls(
             id=uuid.uuid4(),
             user_id=user_id,

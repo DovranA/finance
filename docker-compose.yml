@@ -4,15 +4,17 @@ services:
   # ── PostgreSQL ───────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
+    container_name: finance-postgres
+    networks:
+      - finance-network
     environment:
-      POSTGRES_DB: finance_db
-      POSTGRES_USER: finance_user
-      POSTGRES_PASSWORD: finance_secret
+      POSTGRES_DB: ${POSTGRES_DB:-finance_db}
+      POSTGRES_USER: ${POSTGRES_USER:-finance_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance_secret}
     ports:
-      - "5432:5432"
+      - ${POSTGRES_PORT-5432}:5432
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./sql/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U finance_user -d finance_db" ]
       interval: 5s
@@ -22,8 +24,11 @@ services:
   # ── Redis ────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
+    container_name: finance-redis
+    networks:
+      - finance-network
     ports:
-      - "6379:6379"
+      - ${REDIS_PORT-6379}:6379
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
@@ -33,12 +38,15 @@ services:
   # ── RabbitMQ ─────────────────────────────────────────────
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
+    container_name: finance-rabbitmq
+    networks:
+      - finance-network
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - ${RABBITMQ_PORT-5672}:5672
+      - 15672:15672
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
     healthcheck:
       test: [ "CMD", "rabbitmqctl", "status" ]
       interval: 10s
@@ -48,25 +56,11 @@ services:
   # ── Finance API ──────────────────────────────────────────
   finance-api:
     build: .
+    container_name: finance-api
+    networks:
+      - finance-network
     ports:
-      - "8000:8000"
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: finance_db
-      POSTGRES_USER: finance_user
-      POSTGRES_PASSWORD: finance_secret
-      POSTGRES_POOL_MIN: 10
-      POSTGRES_POOL_MAX: 50
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
-      APP_NAME: finance-service
-      APP_ENV: production
-      APP_LOG_LEVEL: INFO
+      - ${APP_PORT-1010}:8000
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,92 +69,12 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
-
-  # ── Event Consumer Worker ────────────────────────────────
-  event-consumer:
-    build: .
-    command: [ "python", "-m", "app.workers.event_consumer" ]
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: finance_db
-      POSTGRES_USER: finance_user
-      POSTGRES_PASSWORD: finance_secret
-      POSTGRES_POOL_MIN: 5
-      POSTGRES_POOL_MAX: 20
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
-      RABBITMQ_PREFETCH_COUNT: 100
-      APP_LOG_LEVEL: INFO
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
-    deploy:
-      replicas: 2 # Horizontal scaling
-
-  # ── Batch Processor Worker ───────────────────────────────
-  batch-processor:
-    build: .
-    command: [ "python", "-m", "app.workers.batch_processor" ]
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: finance_db
-      POSTGRES_USER: finance_user
-      POSTGRES_PASSWORD: finance_secret
-      POSTGRES_POOL_MIN: 5
-      POSTGRES_POOL_MAX: 20
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      BATCH_SIZE: 500
-      BATCH_INTERVAL_SECONDS: 5
-      APP_LOG_LEVEL: INFO
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    deploy:
-      replicas: 2 # Safe with FOR UPDATE SKIP LOCKED
-
-  # ── Outbox Relay Worker (Transactional Outbox) ───────────
-  outbox-relay:
-    build: .
-    command: [ "python", "-m", "app.workers.outbox_relay" ]
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: finance_db
-      POSTGRES_USER: finance_user
-      POSTGRES_PASSWORD: finance_secret
-      POSTGRES_POOL_MIN: 2
-      POSTGRES_POOL_MAX: 10
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
-      OUTBOX_POLL_INTERVAL: 1.0
-      OUTBOX_BATCH_SIZE: 200
-      OUTBOX_CLEANUP_DAYS: 7
-      APP_LOG_LEVEL: INFO
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
-    deploy:
-      replicas: 2 # Safe with FOR UPDATE SKIP LOCKED
 
 volumes:
   pgdata:
+  redisdata:
+  rabbitmqdata:
+
+networks:
+  finance-network:
+    driver: bridge

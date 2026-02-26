@@ -27,3 +27,8 @@ class BatchStatus(StrEnum):
 class TreasuryAccountType(StrEnum):
     PLATFORM_FEE = "platform_fee"
     TREASURY = "treasury"
+
+
+class LedgerEntryType(str, StrEnum):
+    CREDIT = "credit"
+    DEBIT = "debit"
