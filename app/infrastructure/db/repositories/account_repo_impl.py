@@ -63,6 +63,22 @@ class PgAccountRepository(AccountRepository):
             account_id,
         )
 
+    async def debit(self, account_id: uuid.UUID, amount: int, conn: Connection) -> None:
+        await conn.execute(
+            "UPDATE accounts SET balance = balance - $1, updated_at = NOW() WHERE id = $2 AND balance >= $1",
+            amount,
+            account_id,
+        )
+
+    async def credit(
+        self, account_id: uuid.UUID, amount: int, conn: Connection
+    ) -> None:
+        await conn.execute(
+            "UPDATE accounts SET balance = balance + $1, updated_at = NOW() WHERE id = $2",
+            amount,
+            account_id,
+        )
+
     async def create(self, account: Account, conn: Connection) -> None:
         try:
             await conn.execute(

@@ -14,7 +14,7 @@ class LedgerRepository(ABC):
     """Abstract repository for immutable ledger operations."""
 
     @abstractmethod
-    async def append(self, entry: LedgerEntry, conn: Connection) -> None:
+    async def insert(self, entry: LedgerEntry, conn: Connection) -> None:
         """Insert a new ledger entry. No updates or deletes allowed."""
         ...
 
@@ -25,11 +25,9 @@ class LedgerRepository(ABC):
         conn: Connection,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[LedgerEntry]:
-        ...
+    ) -> list[LedgerEntry]: ...
 
     @abstractmethod
     async def get_by_reference(
         self, reference_id: uuid.UUID, conn: Connection
-    ) -> list[LedgerEntry]:
-        ...
+    ) -> list[LedgerEntry]: ...

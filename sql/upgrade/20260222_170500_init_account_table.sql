@@ -1,3 +1,5 @@
+-- Upgrade: add_ledger_entries_table
+-- Created: 2026-02-23 15:03:21
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL UNIQUE,

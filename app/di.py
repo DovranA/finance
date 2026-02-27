@@ -13,6 +13,7 @@ from app.core.logging import get_logger
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.actor_action_repo import ActorActionRepository
 from app.domain.repositories.economic_action_repo import EconomicActionRepository
+from app.domain.repositories.idempotency_repo import IdempotencyRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
 from app.domain.repositories.outbox_repo import OutboxRepository
 from app.domain.repositories.processed_event_repo import ProcessedEventRepository
@@ -24,6 +25,9 @@ from app.infrastructure.db.repositories.actor_action_repo_impl import (
 )
 from app.infrastructure.db.repositories.economic_action_repo_impl import (
     PgEconomicActionRepository,
+)
+from app.infrastructure.db.repositories.idempotency_repo_impl import (
+    PgIdempotencyRepository,
 )
 from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerRepository
 from app.infrastructure.db.repositories.outbox_repo_impl import PgOutboxRepository
@@ -97,6 +101,10 @@ class RepositoryProvider(Provider):
     account_repo = provide(
         PgAccountRepository,
         provides=AccountRepository,
+    )
+    idempotency_repo = provide(
+        PgIdempotencyRepository,
+        provides=IdempotencyRepository,
     )
     ledger_repo = provide(
         PgLedgerRepository,

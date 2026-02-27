@@ -16,14 +16,12 @@ class AccountRepository(ABC):
     @abstractmethod
     async def get_by_id(
         self, account_id: uuid.UUID, conn: Connection
-    ) -> Account | None:
-        ...
+    ) -> Account | None: ...
 
     @abstractmethod
     async def get_by_user_id(
         self, user_id: uuid.UUID, conn: Connection
-    ) -> Account | None:
-        ...
+    ) -> Account | None: ...
 
     @abstractmethod
     async def get_for_update(
@@ -35,15 +33,24 @@ class AccountRepository(ABC):
     @abstractmethod
     async def get_or_create_by_user_id(
         self, user_id: uuid.UUID, conn: Connection, currency: str = "USD"
-    ) -> Account:
-        ...
+    ) -> Account: ...
 
     @abstractmethod
     async def update_balance(
         self, account_id: uuid.UUID, new_balance: int, conn: Connection
-    ) -> None:
+    ) -> None: ...
+
+    @abstractmethod
+    async def debit(self, account_id: uuid.UUID, amount: int, conn: Connection) -> None:
+        """Decrease balance by amount."""
         ...
 
     @abstractmethod
-    async def create(self, account: Account, conn: Connection) -> None:
+    async def credit(
+        self, account_id: uuid.UUID, amount: int, conn: Connection
+    ) -> None:
+        """Increase balance by amount."""
         ...
+
+    @abstractmethod
+    async def create(self, account: Account, conn: Connection) -> None: ...

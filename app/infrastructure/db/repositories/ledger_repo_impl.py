@@ -13,7 +13,7 @@ from app.domain.repositories.ledger_repo import LedgerRepository
 
 class PgLedgerRepository(LedgerRepository):
 
-    async def append(self, entry: LedgerEntry, conn: Connection) -> None:
+    async def insert(self, entry: LedgerEntry, conn: Connection) -> None:
         await conn.execute(
             "INSERT INTO ledger_entries "
             "(id, account_id, amount, currency, entry_type, reference_id, metadata, created_at) "
