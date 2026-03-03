@@ -8,6 +8,8 @@ from typing import Any
 
 
 class LedgerEntryType(StrEnum):
+    """Ledger-level entry direction: credit or debit."""
+
     CREDIT = "credit"
     DEBIT = "debit"
 
@@ -40,7 +42,7 @@ class LedgerEntry:
         reference_id: uuid.UUID,
         reference_type: str,
         idempotency_key: str,
-        currency: str = "USD",
+        currency: str = "TMT",
         metadata: dict[str, Any] | None = None,
     ) -> "LedgerEntry":
         if amount <= 0:

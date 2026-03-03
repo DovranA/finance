@@ -1,9 +1,26 @@
-class ConditionEngine:
+from __future__ import annotations
 
-    def __init__(self, registry):
+from typing import Any
+
+from asyncpg import Connection
+
+from app.domain.policies.registry import ValidatorRegistry
+
+
+class ConditionEngine:
+    """Evaluates a set of conditions against registered validators."""
+
+    def __init__(self, registry: ValidatorRegistry) -> None:
         self.registry = registry
 
-    async def validate(self, conditions: dict, *, account, metadata, db, redis):
+    async def validate(
+        self,
+        conditions: dict[str, Any],
+        *,
+        account: Any,
+        metadata: dict[str, Any],
+        conn: Connection,
+    ) -> None:
         if not conditions:
             return
 
@@ -14,5 +31,8 @@ class ConditionEngine:
                 raise ValueError(f"Unknown condition: {key}")
 
             await validator.validate(
-                value, account=account, metadata=metadata, db=db, redis=redis
+                value,
+                account=account,
+                metadata=metadata,
+                conn=conn,
             )

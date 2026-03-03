@@ -41,6 +41,14 @@ class Money:
         self._assert_same_currency(other)
         return self.amount >= other.amount
 
+    def __lt__(self, other: Money) -> bool:
+        self._assert_same_currency(other)
+        return self.amount < other.amount
+
+    def __le__(self, other: Money) -> bool:
+        self._assert_same_currency(other)
+        return self.amount <= other.amount
+
     def is_positive(self) -> bool:
         return self.amount > 0
 

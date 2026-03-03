@@ -16,14 +16,17 @@ class PgLedgerRepository(LedgerRepository):
     async def insert(self, entry: LedgerEntry, conn: Connection) -> None:
         await conn.execute(
             "INSERT INTO ledger_entries "
-            "(id, account_id, amount, currency, entry_type, reference_id, metadata, created_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+            "(id, account_id, amount, currency, entry_type, reference_id, "
+            "reference_type, idempotency_key, metadata, created_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
             entry.id,
             entry.account_id,
             entry.amount,
             entry.currency,
             entry.entry_type,
             entry.reference_id,
+            entry.reference_type,
+            entry.idempotency_key,
             orjson.dumps(entry.metadata).decode(),
             entry.created_at,
         )
@@ -36,7 +39,8 @@ class PgLedgerRepository(LedgerRepository):
         offset: int = 0,
     ) -> list[LedgerEntry]:
         rows = await conn.fetch(
-            "SELECT id, account_id, amount, currency, entry_type, reference_id, metadata, created_at "
+            "SELECT id, account_id, amount, currency, entry_type, reference_id, "
+            "reference_type, idempotency_key, metadata, created_at "
             "FROM ledger_entries WHERE account_id = $1 "
             "ORDER BY created_at DESC LIMIT $2 OFFSET $3",
             account_id,
@@ -49,7 +53,8 @@ class PgLedgerRepository(LedgerRepository):
         self, reference_id: uuid.UUID, conn: Connection
     ) -> list[LedgerEntry]:
         rows = await conn.fetch(
-            "SELECT id, account_id, amount, currency, entry_type, reference_id, metadata, created_at "
+            "SELECT id, account_id, amount, currency, entry_type, reference_id, "
+            "reference_type, idempotency_key, metadata, created_at "
             "FROM ledger_entries WHERE reference_id = $1 "
             "ORDER BY created_at",
             reference_id,
@@ -68,6 +73,8 @@ class PgLedgerRepository(LedgerRepository):
             currency=row["currency"],
             entry_type=row["entry_type"],
             reference_id=row["reference_id"],
+            reference_type=row["reference_type"],
+            idempotency_key=row["idempotency_key"],
             metadata=meta,
             created_at=row["created_at"],
         )

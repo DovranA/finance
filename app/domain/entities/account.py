@@ -18,7 +18,7 @@ class Account:
     user_id: uuid.UUID
     balance: int
     id: uuid.UUID = field(default_factory=uuid.uuid4)
-    currency: str = "TENNE"
+    currency: str = "TMT"
     is_active: bool = True
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -37,8 +37,15 @@ class Account:
         self.balance -= amount
         self.updated_at = datetime.now(timezone.utc)
 
+    def ensure_active(self) -> None:
+        """Raise if the account is inactive."""
+        if not self.is_active:
+            from app.domain.exceptions import AccountInactive
+
+            raise AccountInactive(self.id)
+
     @classmethod
-    def create(cls, user_id: uuid.UUID, currency: str = "TENNE") -> Account:
+    def create(cls, user_id: uuid.UUID, currency: str = "TMT") -> Account:
         return cls(
             id=uuid.uuid4(),
             user_id=user_id,

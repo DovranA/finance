@@ -1,6 +1,11 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+"""Shared test fixtures."""
+
 import uuid
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 
 @pytest.fixture
 def mock_transaction(mocker):
@@ -8,13 +13,14 @@ def mock_transaction(mocker):
     tx = mocker.AsyncMock()
     return tx
 
+
 @pytest.fixture
 def mock_conn(mocker, mock_transaction):
-    """Mock asyncpg Connection."""
-    # We use a regular MagicMock for the connection setup so that 
-    # sync methods like .transaction() return a value immediately
-    # instead of returning a coroutine. 
-    # But methods that are awaited in code should be AsyncMocks.
+    """Mock asyncpg Connection.
+
+    Sync methods like .transaction() return a value immediately;
+    awaited methods (execute, fetch, etc.) are AsyncMocks.
+    """
     conn = mocker.MagicMock()
     conn.transaction = mocker.Mock(return_value=mock_transaction)
     conn.execute = mocker.AsyncMock()
@@ -23,19 +29,43 @@ def mock_conn(mocker, mock_transaction):
     conn.fetchval = mocker.AsyncMock()
     return conn
 
+
 @pytest.fixture
 def mock_pool(mocker, mock_conn):
-    """Mock asyncpg Pool."""
-    pool = mocker.AsyncMock()
-    # pool.acquire is awaited: conn = await pool.acquire()
-    pool.acquire.return_value = mock_conn
-    # pool.release is awaited: await pool.release(conn)
+    """Mock asyncpg Pool.
+
+    Supports both:
+      - ``async with pool.acquire() as conn``  (context manager)
+      - ``conn = await pool.acquire()``         (direct await)
+      - ``transaction(pool)``                    (via patched context manager)
+    """
+    pool = mocker.MagicMock()
+
+    # Make pool.acquire() return an async context manager yielding mock_conn
+    acm = mocker.MagicMock()
+    acm.__aenter__ = mocker.AsyncMock(return_value=mock_conn)
+    acm.__aexit__ = mocker.AsyncMock(return_value=False)
+    pool.acquire.return_value = acm
+
     pool.release = mocker.AsyncMock()
+
+    # Patch the transaction context manager used by use cases
+    @asynccontextmanager
+    async def _fake_transaction(p):
+        yield mock_conn
+
+    mocker.patch(
+        "app.infrastructure.db.transaction.transaction",
+        side_effect=_fake_transaction,
+    )
+
     return pool
+
 
 @pytest.fixture
 def sample_user_id():
     return uuid.uuid4()
+
 
 @pytest.fixture
 def sample_account_id():

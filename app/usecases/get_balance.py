@@ -9,7 +9,6 @@ from asyncpg import Pool
 from app.core.logging import get_logger
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.value_objects.enums import Currency
-from app.infrastructure.db.transaction import transaction
 from app.infrastructure.redis.cache import CacheService
 
 logger = get_logger(__name__)
@@ -29,8 +28,8 @@ class GetBalanceUseCase:
         self._cache = cache
 
     async def execute(self, user_id: uuid.UUID) -> dict:
-        # Try cache first
-        async with transaction(self._pool) as conn:
+        # Read-only — no transaction needed, just acquire a connection
+        async with self._pool.acquire() as conn:
             account = await self._account_repo.get_by_user_id(user_id, conn)
 
         if account is None:

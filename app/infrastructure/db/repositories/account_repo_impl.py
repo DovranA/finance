@@ -64,11 +64,17 @@ class PgAccountRepository(AccountRepository):
         )
 
     async def debit(self, account_id: uuid.UUID, amount: int, conn: Connection) -> None:
-        await conn.execute(
+        result = await conn.execute(
             "UPDATE accounts SET balance = balance - $1, updated_at = NOW() WHERE id = $2 AND balance >= $1",
             amount,
             account_id,
         )
+        # asyncpg returns e.g. "UPDATE 1" — check rows affected
+        rows_affected = int(result.split()[-1])
+        if rows_affected == 0:
+            from app.domain.exceptions import InsufficientFunds
+
+            raise InsufficientFunds(account_id, amount)
 
     async def credit(
         self, account_id: uuid.UUID, amount: int, conn: Connection
@@ -82,8 +88,9 @@ class PgAccountRepository(AccountRepository):
     async def create(self, account: Account, conn: Connection) -> None:
         try:
             await conn.execute(
-                "INSERT INTO accounts (user_id, balance, currency, is_active, created_at, updated_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6)",
+                "INSERT INTO accounts (id, user_id, balance, currency, is_active, created_at, updated_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                account.id,
                 account.user_id,
                 account.balance,
                 account.currency,
@@ -91,9 +98,12 @@ class PgAccountRepository(AccountRepository):
                 account.created_at,
                 account.updated_at,
             )
-        except Exception as e:
-            # Log the error with more context
-            logger.error(f"Failed to create account for user_id={account.user_id}: {e}")
+        except Exception:
+            logger.error(
+                "account_create_failed",
+                user_id=str(account.user_id),
+                account_id=str(account.id),
+            )
             raise
 
     @staticmethod

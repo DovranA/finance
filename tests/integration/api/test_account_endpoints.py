@@ -1,18 +1,20 @@
 import pytest
 import uuid
-from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from dishka import make_async_container, Provider, Scope, provide
 from dishka.integrations.fastapi import setup_dishka
 
-from app.main import create_app
+from app.api.routes import accounts
+from app.api.schemas.common import HealthResponse
 from app.usecases.get_balance import GetBalanceUseCase
 
 
-def _make_test_app(mock_uc):
-    """Create a test app with a Dishka container that provides the mock use case."""
-    app = create_app()
+def _make_test_app(mock_uc: AsyncMock) -> FastAPI:
+    """Create a minimal test app with a Dishka container that provides the mock use case."""
+    app = FastAPI()
 
     class MockProvider(Provider):
         scope = Scope.REQUEST
@@ -21,9 +23,9 @@ def _make_test_app(mock_uc):
         def get_balance_uc(self) -> GetBalanceUseCase:
             return mock_uc
 
-    # Replace the container set up by create_app
     container = make_async_container(MockProvider())
     setup_dishka(container, app)
+    app.include_router(accounts.router)
 
     return app
 
@@ -45,7 +47,7 @@ def test_get_balance_success(client, mock_get_balance_uc):
         "user_id": str(user_id),
         "account_id": str(uuid.uuid4()),
         "balance": 1000,
-        "currency": "USD",
+        "currency": "TMT",
         "found": True,
         "cached": False,
     }
@@ -63,7 +65,7 @@ def test_get_balance_not_found(client, mock_get_balance_uc):
     mock_get_balance_uc.execute.return_value = {
         "user_id": str(user_id),
         "balance": 0,
-        "currency": "USD",
+        "currency": "TMT",
         "found": False,
     }
 

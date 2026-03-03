@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -79,10 +81,10 @@ class BatchSettings(BaseSettings):
 class OutboxSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OUTBOX_")
 
-    poll_interval: float = 1.0          # seconds between relay polls
-    batch_size: int = 200               # max messages per poll cycle
-    cleanup_days: int = 7               # delete sent messages older than N days
-    cleanup_interval: int = 3600        # seconds between cleanup runs
+    poll_interval: float = 1.0  # seconds between relay polls
+    batch_size: int = 200  # max messages per poll cycle
+    cleanup_days: int = 7  # delete sent messages older than N days
+    cleanup_interval: int = 3600  # seconds between cleanup runs
 
 
 class Settings:
@@ -97,5 +99,7 @@ class Settings:
         self.outbox = OutboxSettings()
 
 
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Return cached application settings (parsed once from env vars)."""
     return Settings()

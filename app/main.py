@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from dishka.integrations.fastapi import setup_dishka
 
-from app.api.routes import accounts, admin, test
-from app.api.schemas.schemas import HealthResponse
+from app.api.routes import accounts
+from app.api.schemas.common import HealthResponse
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
 from app.di import create_container
+from app.domain.exceptions import (
+    AccountInactive,
+    AccountNotFound,
+    CurrencyMismatch,
+    DomainError,
+    DuplicateOperation,
+    InsufficientFunds,
+)
 
 logger = get_logger(__name__)
 
@@ -30,10 +39,34 @@ def create_app() -> FastAPI:
     setup_dishka(container, app)
 
     # ── Register routers ─────────────────────────────────
-    # app.include_router(admin.router)
     app.include_router(accounts.router)
-    app.include_router(test.router)
 
+    # ── Exception handlers ───────────────────────────────
+    @app.exception_handler(AccountNotFound)
+    async def account_not_found_handler(request: Request, exc: AccountNotFound):
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+
+    @app.exception_handler(InsufficientFunds)
+    async def insufficient_funds_handler(request: Request, exc: InsufficientFunds):
+        return JSONResponse(status_code=422, content={"error": str(exc)})
+
+    @app.exception_handler(DuplicateOperation)
+    async def duplicate_handler(request: Request, exc: DuplicateOperation):
+        return JSONResponse(status_code=409, content={"error": str(exc)})
+
+    @app.exception_handler(AccountInactive)
+    async def inactive_handler(request: Request, exc: AccountInactive):
+        return JSONResponse(status_code=422, content={"error": str(exc)})
+
+    @app.exception_handler(CurrencyMismatch)
+    async def currency_handler(request: Request, exc: CurrencyMismatch):
+        return JSONResponse(status_code=422, content={"error": str(exc)})
+
+    @app.exception_handler(DomainError)
+    async def domain_error_handler(request: Request, exc: DomainError):
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+
+    # ── Health endpoint ──────────────────────────────────
     @app.get("/health", response_model=HealthResponse, tags=["Health"])
     async def health_check():
         return HealthResponse(service=settings.app.name)

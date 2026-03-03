@@ -1,24 +1,33 @@
+from __future__ import annotations
+
+from typing import Any
+
+from asyncpg import Connection
+
+from app.domain.exceptions import DuplicateOperation
 from app.domain.policies.base import ConditionValidator
 
 
 class OneTimeValidator(ConditionValidator):
     key = "one_time_only"
 
-    async def validate(self, value, *, account, metadata, db, **kwargs):
+    async def validate(
+        self,
+        value: Any,
+        *,
+        account: Any,
+        metadata: dict[str, Any],
+        conn: Connection,
+    ) -> None:
         if not value:
             return
 
-        exists = await db.fetchval(
-            """
-            SELECT 1
-            FROM ledger_entries
-            WHERE account_id = $1
-              AND reference_id = $2
-            LIMIT 1
-            """,
+        exists = await conn.fetchval(
+            "SELECT 1 FROM ledger_entries "
+            "WHERE account_id = $1 AND reference_id = $2 LIMIT 1",
             account.id,
             metadata["event_id"],
         )
 
         if exists:
-            raise Exception("Event already used")
+            raise DuplicateOperation(f"event:{metadata['event_id']}")
