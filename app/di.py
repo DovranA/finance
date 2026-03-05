@@ -22,7 +22,7 @@ from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerReposito
 from app.infrastructure.redis.cache import CacheService
 from app.infrastructure.redis.client import create_redis_pool, close_redis
 from app.usecases.get_balance import GetBalanceUseCase
-from app.usecases.create_ledger import CreateLedgerEntryUseCase
+
 
 logger = get_logger(__name__)
 
@@ -100,21 +100,6 @@ class UseCaseProvider(Provider):
             pool=pool,
             account_repo=account_repo,
             cache=cache,
-        )
-
-    @provide
-    def create_ledger_entry_uc(
-        self,
-        pool: Pool,
-        account_repo: AccountRepository,
-        ledger_repo: LedgerRepository,
-        idempotency_repo: IdempotencyRepository,
-    ) -> CreateLedgerEntryUseCase:
-        return CreateLedgerEntryUseCase(
-            pool=pool,
-            account_repo=account_repo,
-            ledger_repo=ledger_repo,
-            idempotency_repo=idempotency_repo,
         )
 
 

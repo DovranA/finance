@@ -16,7 +16,7 @@ class Money:
     """
 
     amount: int
-    currency: Currency = Currency.USD
+    currency: Currency = Currency.TMT
 
     def __post_init__(self) -> None:
         if not isinstance(self.amount, int):
