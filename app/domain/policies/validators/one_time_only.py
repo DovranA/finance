@@ -23,10 +23,11 @@ class OneTimeValidator(ConditionValidator):
             return
 
         exists = await conn.fetchval(
-            "SELECT 1 FROM ledger_entries "
-            "WHERE account_id = $1 AND reference_id = $2 LIMIT 1",
+            "SELECT 1 FROM ledger_entries le "
+            "JOIN transactions t ON t.id = le.transaction_id "
+            "WHERE le.account_id = $1 AND t.reference_id = $2 LIMIT 1",
             account.id,
-            metadata["event_id"],
+            str(metadata["event_id"]),
         )
 
         if exists:

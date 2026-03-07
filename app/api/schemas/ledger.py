@@ -12,9 +12,5 @@ class CreateLedgerEntryRequest(BaseModel):
 
     account_id: uuid.UUID
     amount: int = Field(..., gt=0, description="Amount in smallest currency unit")
-    entry_type: str = Field(..., description="'credit' or 'debit'")
-    reference_id: uuid.UUID
-    reference_type: str = Field(..., min_length=1, max_length=100)
-    idempotency_key: str = Field(..., min_length=1, max_length=128)
-    currency: str = "TMT"
-    metadata: dict | None = None
+    direction: int = Field(..., description="1 for credit, -1 for debit")
+    transaction_id: uuid.UUID

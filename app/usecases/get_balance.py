@@ -30,7 +30,7 @@ class GetBalanceUseCase:
     async def execute(self, user_id: uuid.UUID) -> dict:
         # Read-only — no transaction needed, just acquire a connection
         async with self._pool.acquire() as conn:
-            account = await self._account_repo.get_by_user_id(user_id, conn)
+            account = await self._account_repo.get_by_owner_id(user_id, conn)
 
         if account is None:
             return {

@@ -11,6 +11,10 @@ from app.domain.repositories.account_repo import AccountRepository
 
 logger = get_logger(__name__)
 
+_SELECT_COLS = (
+    "id, user_id, owner_type, balance, currency, is_active, created_at, updated_at"
+)
+
 
 class PgAccountRepository(AccountRepository):
 
@@ -18,18 +22,16 @@ class PgAccountRepository(AccountRepository):
         self, account_id: uuid.UUID, conn: Connection
     ) -> Account | None:
         row = await conn.fetchrow(
-            "SELECT id, user_id, balance, currency, is_active, created_at, updated_at "
-            "FROM accounts WHERE id = $1",
+            f"SELECT {_SELECT_COLS} FROM accounts WHERE id = $1",
             account_id,
         )
         return self._to_entity(row) if row else None
 
-    async def get_by_user_id(
+    async def get_by_owner_id(
         self, user_id: uuid.UUID, conn: Connection
     ) -> Account | None:
         row = await conn.fetchrow(
-            "SELECT id, user_id, balance, currency, is_active, created_at, updated_at "
-            "FROM accounts WHERE user_id = $1",
+            f"SELECT {_SELECT_COLS} FROM accounts WHERE user_id = $1",
             user_id,
         )
         return self._to_entity(row) if row else None
@@ -38,16 +40,15 @@ class PgAccountRepository(AccountRepository):
         self, account_id: uuid.UUID, conn: Connection
     ) -> Account | None:
         row = await conn.fetchrow(
-            "SELECT id, user_id, balance, currency, is_active, created_at, updated_at "
-            "FROM accounts WHERE id = $1 FOR UPDATE",
+            f"SELECT {_SELECT_COLS} FROM accounts WHERE id = $1 FOR UPDATE",
             account_id,
         )
         return self._to_entity(row) if row else None
 
-    async def get_or_create_by_user_id(
-        self, user_id: uuid.UUID, conn: Connection, currency: str = "USD"
+    async def get_or_create_by_owner_id(
+        self, user_id: uuid.UUID, conn: Connection, currency: str = "TMT"
     ) -> Account:
-        account = await self.get_by_user_id(user_id, conn)
+        account = await self.get_by_owner_id(user_id, conn)
         if account is not None:
             return account
         new_account = Account.create(user_id=user_id, currency=currency)
@@ -65,11 +66,11 @@ class PgAccountRepository(AccountRepository):
 
     async def debit(self, account_id: uuid.UUID, amount: int, conn: Connection) -> None:
         result = await conn.execute(
-            "UPDATE accounts SET balance = balance - $1, updated_at = NOW() WHERE id = $2 AND balance >= $1",
+            "UPDATE accounts SET balance = balance - $1, updated_at = NOW() "
+            "WHERE id = $2 AND balance >= $1",
             amount,
             account_id,
         )
-        # asyncpg returns e.g. "UPDATE 1" — check rows affected
         rows_affected = int(result.split()[-1])
         if rows_affected == 0:
             from app.domain.exceptions import InsufficientFunds
@@ -88,10 +89,12 @@ class PgAccountRepository(AccountRepository):
     async def create(self, account: Account, conn: Connection) -> None:
         try:
             await conn.execute(
-                "INSERT INTO accounts (id, user_id, balance, currency, is_active, created_at, updated_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "INSERT INTO accounts "
+                "(id, user_id, owner_type, balance, currency, is_active, created_at, updated_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                 account.id,
                 account.user_id,
+                account.owner_type,
                 account.balance,
                 account.currency,
                 account.is_active,
@@ -111,6 +114,7 @@ class PgAccountRepository(AccountRepository):
         return Account(
             id=row["id"],
             user_id=row["user_id"],
+            owner_type=row["owner_type"],
             balance=row["balance"],
             currency=row["currency"],
             is_active=row["is_active"],

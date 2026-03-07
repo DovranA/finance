@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 
-import orjson
 from asyncpg import Connection
 
 from app.domain.entities.ledger_entry import LedgerEntry
@@ -16,18 +15,13 @@ class PgLedgerRepository(LedgerRepository):
     async def insert(self, entry: LedgerEntry, conn: Connection) -> None:
         await conn.execute(
             "INSERT INTO ledger_entries "
-            "(id, account_id, amount, currency, entry_type, reference_id, "
-            "reference_type, idempotency_key, metadata, created_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            "(id, account_id, transaction_id, amount, direction, created_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6)",
             entry.id,
             entry.account_id,
+            entry.transaction_id,
             entry.amount,
-            entry.currency,
-            entry.entry_type,
-            entry.reference_id,
-            entry.reference_type,
-            entry.idempotency_key,
-            orjson.dumps(entry.metadata).decode(),
+            entry.direction,
             entry.created_at,
         )
 
@@ -39,8 +33,7 @@ class PgLedgerRepository(LedgerRepository):
         offset: int = 0,
     ) -> list[LedgerEntry]:
         rows = await conn.fetch(
-            "SELECT id, account_id, amount, currency, entry_type, reference_id, "
-            "reference_type, idempotency_key, metadata, created_at "
+            "SELECT id, account_id, transaction_id, amount, direction, created_at "
             "FROM ledger_entries WHERE account_id = $1 "
             "ORDER BY created_at DESC LIMIT $2 OFFSET $3",
             account_id,
@@ -49,32 +42,24 @@ class PgLedgerRepository(LedgerRepository):
         )
         return [self._to_entity(r) for r in rows]
 
-    async def get_by_reference(
-        self, reference_id: uuid.UUID, conn: Connection
+    async def get_by_transaction(
+        self, transaction_id: uuid.UUID, conn: Connection
     ) -> list[LedgerEntry]:
         rows = await conn.fetch(
-            "SELECT id, account_id, amount, currency, entry_type, reference_id, "
-            "reference_type, idempotency_key, metadata, created_at "
-            "FROM ledger_entries WHERE reference_id = $1 "
+            "SELECT id, account_id, transaction_id, amount, direction, created_at "
+            "FROM ledger_entries WHERE transaction_id = $1 "
             "ORDER BY created_at",
-            reference_id,
+            transaction_id,
         )
         return [self._to_entity(r) for r in rows]
 
     @staticmethod
     def _to_entity(row) -> LedgerEntry:
-        meta = row["metadata"]
-        if isinstance(meta, str):
-            meta = orjson.loads(meta)
         return LedgerEntry(
             id=row["id"],
             account_id=row["account_id"],
+            transaction_id=row["transaction_id"],
             amount=row["amount"],
-            currency=row["currency"],
-            entry_type=row["entry_type"],
-            reference_id=row["reference_id"],
-            reference_type=row["reference_type"],
-            idempotency_key=row["idempotency_key"],
-            metadata=meta,
+            direction=row["direction"],
             created_at=row["created_at"],
         )

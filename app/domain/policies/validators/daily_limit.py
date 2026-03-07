@@ -24,8 +24,10 @@ class DailyLimitValidator(ConditionValidator):
         conn: Connection,
     ) -> None:
         count = await conn.fetchval(
-            "SELECT COUNT(*) FROM ledger_entries "
-            "WHERE account_id = $1 AND entry_type = $2 AND created_at >= CURRENT_DATE",
+            "SELECT COUNT(*) FROM ledger_entries le "
+            "JOIN transactions t ON t.id = le.transaction_id "
+            "WHERE le.account_id = $1 AND t.reference_type = $2 "
+            "AND le.created_at >= CURRENT_DATE",
             account.id,
             metadata["event_code"],
         )

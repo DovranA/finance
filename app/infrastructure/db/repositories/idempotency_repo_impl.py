@@ -1,87 +1,98 @@
-"""Concrete idempotency-key repository — raw asyncpg SQL."""
+"""Concrete transaction repository — raw asyncpg SQL."""
 
 from __future__ import annotations
 
+import uuid
+
+import orjson
 from asyncpg import Connection
 
-from app.domain.entities.idempotency_key import IdempotencyKey
-from app.domain.repositories.idempotency_repo import IdempotencyRepository
+from app.domain.entities.idempotency_key import Transaction
+from app.domain.repositories.idempotency_repo import TransactionRepository
 
 
-class PgIdempotencyRepository(IdempotencyRepository):
+class PgTransactionRepository(TransactionRepository):
 
     # ── queries ────────────────────────────────────────────────
 
-    async def exists(self, key: str, conn: Connection) -> bool:
+    async def exists(self, idempotency_key: str, conn: Connection) -> bool:
         return await conn.fetchval(
-            "SELECT EXISTS(SELECT 1 FROM idempotency_keys WHERE key = $1)",
-            key,
+            "SELECT EXISTS(SELECT 1 FROM transactions WHERE idempotency_key = $1)",
+            idempotency_key,
         )
 
-    async def get_by_key(self, key: str, conn: Connection) -> IdempotencyKey | None:
+    async def get_by_key(
+        self, idempotency_key: str, conn: Connection
+    ) -> Transaction | None:
         row = await conn.fetchrow(
-            "SELECT id, key, status, response_code, response_body, "
-            "created_at, expires_at "
-            "FROM idempotency_keys WHERE key = $1",
-            key,
+            "SELECT id, idempotency_key, status, reference_type, reference_id, "
+            "metadata, created_at, expires_at "
+            "FROM transactions WHERE idempotency_key = $1",
+            idempotency_key,
+        )
+        return self._to_entity(row) if row else None
+
+    async def get_by_id(self, tx_id: uuid.UUID, conn: Connection) -> Transaction | None:
+        row = await conn.fetchrow(
+            "SELECT id, idempotency_key, status, reference_type, reference_id, "
+            "metadata, created_at, expires_at "
+            "FROM transactions WHERE id = $1",
+            tx_id,
         )
         return self._to_entity(row) if row else None
 
     # ── commands ───────────────────────────────────────────────
 
-    async def save(self, entry: IdempotencyKey, conn: Connection) -> None:
+    async def save(self, entry: Transaction, conn: Connection) -> None:
         await conn.execute(
-            "INSERT INTO idempotency_keys "
-            "(id, key, status, response_code, response_body, created_at, expires_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            "INSERT INTO transactions "
+            "(id, idempotency_key, status, reference_type, reference_id, "
+            "metadata, created_at, expires_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
             entry.id,
-            entry.key,
+            entry.idempotency_key,
             entry.status,
-            entry.response_code,
-            entry.response_body,
+            entry.reference_type,
+            entry.reference_id,
+            orjson.dumps(entry.metadata).decode(),
             entry.created_at,
             entry.expires_at,
         )
 
-    async def mark_completed(
-        self,
-        key: str,
-        response_code: int,
-        response_body: str,
-        conn: Connection,
-    ) -> None:
+    async def mark_completed(self, idempotency_key: str, conn: Connection) -> None:
         await conn.execute(
-            "UPDATE idempotency_keys "
-            "SET status = 'completed', response_code = $1, response_body = $2 "
-            "WHERE key = $3",
-            response_code,
-            response_body,
-            key,
+            "UPDATE transactions SET status = 'completed' "
+            "WHERE idempotency_key = $1",
+            idempotency_key,
         )
 
-    async def mark_failed(self, key: str, conn: Connection) -> None:
+    async def mark_failed(self, idempotency_key: str, conn: Connection) -> None:
         await conn.execute(
-            "UPDATE idempotency_keys SET status = 'failed' WHERE key = $1",
-            key,
+            "UPDATE transactions SET status = 'failed' WHERE idempotency_key = $1",
+            idempotency_key,
         )
 
     async def delete_expired(self, conn: Connection) -> int:
         result: str = await conn.execute(
-            "DELETE FROM idempotency_keys WHERE expires_at IS NOT NULL AND expires_at < NOW()",
+            "DELETE FROM transactions "
+            "WHERE expires_at IS NOT NULL AND expires_at < NOW()",
         )
-        # asyncpg returns e.g. "DELETE 42"
         return int(result.split()[-1])
 
     # ── mapping ────────────────────────────────────────────────
 
     @staticmethod
-    def _to_entity(row) -> IdempotencyKey:
-        return IdempotencyKey(
+    def _to_entity(row) -> Transaction:
+        meta = row["metadata"]
+        if isinstance(meta, str):
+            meta = orjson.loads(meta)
+        return Transaction(
             id=row["id"],
-            key=row["key"],
+            idempotency_key=row["idempotency_key"],
             status=row["status"],
-            response_code=row["response_code"],
-            response_body=row["response_body"],
+            reference_type=row["reference_type"],
+            reference_id=row["reference_id"],
+            metadata=meta,
             created_at=row["created_at"],
             expires_at=row["expires_at"],
         )

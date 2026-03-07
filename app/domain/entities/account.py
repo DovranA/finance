@@ -15,9 +15,10 @@ class Account:
     All mutations must happen inside a DB transaction with row-level locking.
     """
 
-    user_id: uuid.UUID
+    user_id: uuid.UUID | None
     balance: int
     id: uuid.UUID = field(default_factory=uuid.uuid4)
+    owner_type: str | None = None
     currency: str = "TMT"
     is_active: bool = True
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -45,10 +46,16 @@ class Account:
             raise AccountInactive(self.id)
 
     @classmethod
-    def create(cls, user_id: uuid.UUID, currency: str = "TMT") -> Account:
+    def create(
+        cls,
+        user_id: uuid.UUID | None,
+        currency: str = "TMT",
+        owner_type: str | None = None,
+    ) -> Account:
         return cls(
             id=uuid.uuid4(),
             user_id=user_id,
             balance=0,
             currency=currency,
+            owner_type=owner_type,
         )

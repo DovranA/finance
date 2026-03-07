@@ -19,7 +19,7 @@ class AccountRepository(ABC):
     ) -> Account | None: ...
 
     @abstractmethod
-    async def get_by_user_id(
+    async def get_by_owner_id(
         self, user_id: uuid.UUID, conn: Connection
     ) -> Account | None: ...
 
@@ -31,8 +31,8 @@ class AccountRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_or_create_by_user_id(
-        self, user_id: uuid.UUID, conn: Connection, currency: str = "USD"
+    async def get_or_create_by_owner_id(
+        self, user_id: uuid.UUID, conn: Connection, currency: str = "TMT"
     ) -> Account: ...
 
     @abstractmethod

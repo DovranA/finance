@@ -2,7 +2,8 @@
 -- Created: 2026-02-22 17:05:00
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY,
-    user_id UUID NOT NULL UNIQUE,
+    user_id UUID DEFAULT NULL,
+    owner_type VARCHAR(64),
     currency VARCHAR(10) NOT NULL,
     balance BIGINT NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -13,6 +14,8 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_accounts_active ON accounts (is_active);
+
+CREATE INDEX idx_accounts_user_currency ON accounts (user_id, currency);
 
 ALTER TABLE accounts
 ADD CONSTRAINT balance_non_negative CHECK (balance >= 0);

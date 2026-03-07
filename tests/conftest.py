@@ -63,7 +63,7 @@ def mock_pool(mocker, mock_conn):
 
 
 @pytest.fixture
-def sample_user_id():
+def sample_owner_id():
     return uuid.uuid4()
 
 

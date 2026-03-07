@@ -1,46 +1,48 @@
-"""Idempotency key repository interface."""
+"""Transaction repository interface."""
 
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
 
 from asyncpg import Connection
 
-from app.domain.entities.idempotency_key import IdempotencyKey
+from app.domain.entities.idempotency_key import Transaction
 
 
-class IdempotencyRepository(ABC):
-    """Abstract repository for idempotency-key operations."""
+class TransactionRepository(ABC):
+    """Abstract repository for transaction (idempotency) operations."""
 
     @abstractmethod
-    async def exists(self, key: str, conn: Connection) -> bool:
-        """Return True if *key* has already been recorded."""
+    async def exists(self, idempotency_key: str, conn: Connection) -> bool:
+        """Return True if the idempotency key has already been recorded."""
         ...
 
     @abstractmethod
-    async def get_by_key(self, key: str, conn: Connection) -> IdempotencyKey | None:
-        """Fetch a stored idempotency record by its key string."""
+    async def get_by_key(
+        self, idempotency_key: str, conn: Connection
+    ) -> Transaction | None:
+        """Fetch a transaction by its idempotency key."""
         ...
 
     @abstractmethod
-    async def save(self, entry: IdempotencyKey, conn: Connection) -> None:
-        """Persist a new idempotency key record."""
+    async def get_by_id(self, tx_id: uuid.UUID, conn: Connection) -> Transaction | None:
+        """Fetch a transaction by primary key."""
         ...
 
     @abstractmethod
-    async def mark_completed(
-        self,
-        key: str,
-        response_code: int,
-        response_body: str,
-        conn: Connection,
-    ) -> None:
-        """Mark an existing key as completed with its cached response."""
+    async def save(self, entry: Transaction, conn: Connection) -> None:
+        """Insert a new transaction."""
         ...
 
     @abstractmethod
-    async def mark_failed(self, key: str, conn: Connection) -> None:
-        """Mark an existing key as failed so it can be retried."""
+    async def mark_completed(self, idempotency_key: str, conn: Connection) -> None:
+        """Mark transaction as completed."""
+        ...
+
+    @abstractmethod
+    async def mark_failed(self, idempotency_key: str, conn: Connection) -> None:
+        """Mark transaction as failed so it can be retried."""
         ...
 
     @abstractmethod

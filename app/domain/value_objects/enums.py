@@ -12,6 +12,12 @@ class Currency(StrEnum):
     TMT = "TMT"
 
 
+class TransactionStatus(StrEnum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class EntryType(StrEnum):
     ACTOR_REWARD = "actor_reward"
     PUBLISHER_REWARD = "publisher_reward"

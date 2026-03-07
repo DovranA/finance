@@ -28,6 +28,6 @@ class LedgerRepository(ABC):
     ) -> list[LedgerEntry]: ...
 
     @abstractmethod
-    async def get_by_reference(
-        self, reference_id: uuid.UUID, conn: Connection
+    async def get_by_transaction(
+        self, transaction_id: uuid.UUID, conn: Connection
     ) -> list[LedgerEntry]: ...

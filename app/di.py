@@ -11,17 +11,19 @@ from dishka import Provider, Scope, provide, make_async_container, AsyncContaine
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.repositories.account_repo import AccountRepository
-from app.domain.repositories.idempotency_repo import IdempotencyRepository
+from app.domain.repositories.idempotency_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
 from app.infrastructure.db.connection import create_pool, close_pool
 from app.infrastructure.db.repositories.account_repo_impl import PgAccountRepository
 from app.infrastructure.db.repositories.idempotency_repo_impl import (
-    PgIdempotencyRepository,
+    PgTransactionRepository,
 )
 from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerRepository
 from app.infrastructure.redis.cache import CacheService
 from app.infrastructure.redis.client import create_redis_pool, close_redis
 from app.usecases.get_balance import GetBalanceUseCase
+from app.usecases.set_balance import SetBalanceUseCase
+from app.usecases.transfer import TransferUseCase
 
 
 logger = get_logger(__name__)
@@ -74,9 +76,9 @@ class RepositoryProvider(Provider):
         PgAccountRepository,
         provides=AccountRepository,
     )
-    idempotency_repo = provide(
-        PgIdempotencyRepository,
-        provides=IdempotencyRepository,
+    transaction_repo = provide(
+        PgTransactionRepository,
+        provides=TransactionRepository,
     )
     ledger_repo = provide(
         PgLedgerRepository,
@@ -99,6 +101,40 @@ class UseCaseProvider(Provider):
         return GetBalanceUseCase(
             pool=pool,
             account_repo=account_repo,
+            cache=cache,
+        )
+
+    @provide
+    def set_balance_uc(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+        transaction_repo: TransactionRepository,
+        ledger_repo: LedgerRepository,
+        cache: CacheService | None,
+    ) -> SetBalanceUseCase:
+        return SetBalanceUseCase(
+            pool=pool,
+            account_repo=account_repo,
+            transaction_repo=transaction_repo,
+            ledger_repo=ledger_repo,
+            cache=cache,
+        )
+
+    @provide
+    def transfer_uc(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+        transaction_repo: TransactionRepository,
+        ledger_repo: LedgerRepository,
+        cache: CacheService | None,
+    ) -> TransferUseCase:
+        return TransferUseCase(
+            pool=pool,
+            account_repo=account_repo,
+            transaction_repo=transaction_repo,
+            ledger_repo=ledger_repo,
             cache=cache,
         )
 
