@@ -8,7 +8,7 @@ import orjson
 from asyncpg import Connection
 
 from app.domain.entities.idempotency_key import Transaction
-from app.domain.repositories.idempotency_repo import TransactionRepository
+from app.domain.repositories.transfer_repo import TransactionRepository
 
 
 class PgTransactionRepository(TransactionRepository):

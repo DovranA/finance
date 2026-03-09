@@ -6,8 +6,6 @@ from app.core.logging import get_logger
 from app.domain.entities.idempotency_key import Transaction
 from app.domain.entities.ledger_entry import (
     LedgerEntry,
-    DIRECTION_CREDIT,
-    DIRECTION_DEBIT,
 )
 from app.domain.exceptions import (
     AccountNotFound,
@@ -15,8 +13,9 @@ from app.domain.exceptions import (
     InsufficientFunds,
 )
 from app.domain.repositories.account_repo import AccountRepository
-from app.domain.repositories.idempotency_repo import TransactionRepository
+from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
+from app.domain.value_objects.enums import LedgerDirection
 from app.infrastructure.db.transaction import transaction
 from app.infrastructure.redis.cache import CacheService
 
@@ -89,7 +88,7 @@ class TransferUseCase:
                     account_id=from_account_id,
                     transaction_id=tx.id,
                     amount=amount,
-                    direction=DIRECTION_DEBIT,
+                    direction=LedgerDirection.DIRECTION_DEBIT,
                 ),
                 conn,
             )
@@ -101,7 +100,7 @@ class TransferUseCase:
                     account_id=to_account_id,
                     transaction_id=tx.id,
                     amount=amount,
-                    direction=DIRECTION_CREDIT,
+                    direction=LedgerDirection.DIRECTION_CREDIT,
                 ),
                 conn,
             )

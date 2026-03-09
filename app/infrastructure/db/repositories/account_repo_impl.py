@@ -55,6 +55,13 @@ class PgAccountRepository(AccountRepository):
         await self.create(new_account, conn)
         return new_account
 
+    async def get_by_account_type(self, type, conn):
+        row = await conn.fetchrow(
+            f"SELECT {_SELECT_COLS} FROM accounts WHERE owner_type = $1 LIMIT 1",
+            type,
+        )
+        return self._to_entity(row) if row else None
+
     async def update_balance(
         self, account_id: uuid.UUID, new_balance: int, conn: Connection
     ) -> None:

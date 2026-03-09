@@ -4,9 +4,9 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from app.domain.value_objects.enums import LedgerDirection
+
 # Direction constants matching DB CHECK constraint
-DIRECTION_CREDIT = 1
-DIRECTION_DEBIT = -1
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class LedgerEntry:
     account_id: uuid.UUID
     transaction_id: uuid.UUID
     amount: int
-    direction: int  # +1 or -1
+    direction: LedgerDirection  # +1 or -1
 
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -32,13 +32,13 @@ class LedgerEntry:
         account_id: uuid.UUID,
         transaction_id: uuid.UUID,
         amount: int,
-        direction: int,
+        direction: LedgerDirection,
     ) -> LedgerEntry:
         if amount <= 0:
             raise ValueError("Ledger amount must be positive")
-        if direction not in (DIRECTION_CREDIT, DIRECTION_DEBIT):
+        if not isinstance(direction, LedgerDirection):
             raise ValueError(
-                f"Direction must be {DIRECTION_CREDIT} or {DIRECTION_DEBIT}"
+                f"Direction must be {LedgerDirection.DIRECTION_CREDIT} or {LedgerDirection.DIRECTION_DEBIT}"
             )
 
         return cls(

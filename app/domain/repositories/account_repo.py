@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from asyncpg import Connection
 
 from app.domain.entities.account import Account
+from app.domain.value_objects.enums import AccountTypes
 
 
 class AccountRepository(ABC):
@@ -16,6 +17,10 @@ class AccountRepository(ABC):
     @abstractmethod
     async def get_by_id(
         self, account_id: uuid.UUID, conn: Connection
+    ) -> Account | None: ...
+    @abstractmethod
+    async def get_by_account_type(
+        self, type: AccountTypes, conn: Connection
     ) -> Account | None: ...
 
     @abstractmethod

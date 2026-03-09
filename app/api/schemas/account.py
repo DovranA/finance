@@ -1,6 +1,6 @@
 """Request/response schemas for account endpoints."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class BalanceResponse(BaseModel):
@@ -10,3 +10,7 @@ class BalanceResponse(BaseModel):
     currency: str
     found: bool
     cached: bool = False
+
+
+class NewBalanceRequest(BaseModel):
+    new_balance: int = Field(ge=1)

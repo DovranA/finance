@@ -5,10 +5,12 @@ from asyncpg import Pool
 
 from app.core.logging import get_logger
 from app.domain.entities.idempotency_key import Transaction
-from app.domain.entities.ledger_entry import LedgerEntry, DIRECTION_DEBIT
+from app.domain.entities.ledger_entry import LedgerEntry
+from app.domain.exceptions import AccountNotFound, CurrencyMismatch
 from app.domain.repositories.account_repo import AccountRepository
-from app.domain.repositories.idempotency_repo import TransactionRepository
+from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
+from app.domain.value_objects.enums import AccountTypes, LedgerDirection
 from app.infrastructure.db.transaction import transaction
 from app.infrastructure.redis.cache import CacheService
 
@@ -33,42 +35,73 @@ class SetBalanceUseCase:
         self._ledger_repo = ledger_repo
         self._cache = cache
 
-    async def execute(self, user_id: UUID, amount: int) -> dict:
-        """Set the balance for a user's account. This will overwrite the existing balance."""
-        async with transaction(self._pool) as conn:
-            account = await self._account_repo.get_by_owner_id(user_id, conn)
-            if not account:
-                raise ValueError("Account not found")
+    async def execute(self, user_id: UUID, new_balance: int):
 
-            # Create transaction record
+        async with transaction(self._pool) as conn:
+            account = await self._account_repo.get_for_update(user_id, conn)
+            pool = await self._account_repo.get_by_account_type(
+                AccountTypes.TREASURY, conn
+            )
+            if not pool:
+                raise AccountNotFound(f"{AccountTypes.TREASURY} not fount")
+            if pool.balance <= new_balance:
+                raise CurrencyMismatch("On Pool low balance")
+            current_balance = account.balance
+            delta = new_balance - current_balance
+
+            if delta == 0:
+                return
+
             tx = Transaction.create(
                 idempotency_key=f"set_balance:{account.id}:{uuid.uuid4()}",
                 reference_type="REST_API",
                 reference_id=str(account.id),
             )
+
             await self._transaction_repo.save(tx, conn)
 
-            # Update balance
-            await self._account_repo.update_balance(account.id, amount, conn)
-
-            # Record in ledger
-            await self._ledger_repo.insert(
-                LedgerEntry.create(
-                    account_id=account.id,
-                    transaction_id=tx.id,
-                    amount=amount,
-                    direction=DIRECTION_DEBIT,
-                ),
+            await self._ledger_repo.insert_many(
+                [
+                    LedgerEntry.create(
+                        account_id=pool.id,
+                        transaction_id=tx.id,
+                        amount=abs(delta),
+                        direction=(
+                            LedgerDirection.DIRECTION_DEBIT
+                            if delta > 0
+                            else LedgerDirection.DIRECTION_CREDIT
+                        ),
+                    ),
+                    LedgerEntry.create(
+                        account_id=account.id,
+                        transaction_id=tx.id,
+                        amount=abs(delta),
+                        direction=(
+                            LedgerDirection.DIRECTION_CREDIT
+                            if delta > 0
+                            else LedgerDirection.DIRECTION_DEBIT
+                        ),
+                    ),
+                ],
                 conn,
             )
-
-            # Mark transaction completed
+            if delta > 0:
+                await self._account_repo.debit(pool.id, abs(delta), conn)
+                await self._account_repo.credit(account.id, abs(delta), conn)
+            else:
+                await self._account_repo.credit(pool.id, abs(delta), conn)
+                await self._account_repo.debit(account.id, abs(delta), conn)
+            account.balance = new_balance
             await self._transaction_repo.mark_completed(tx.idempotency_key, conn)
-
-            # Invalidate cache
             if self._cache:
-                await self._cache.set_cached_balance(
-                    account_id=account.id, balance=amount
-                )
+                await self._cache.set_cached_balance(account.id, account.balance)
+                await self._cache.set_cached_balance(pool.id, account.balance)
 
-        return {"user_id": str(user_id), "new_balance": amount}
+        return {
+            "user_id": str(user_id),
+            "account_id": str(account.id),
+            "balance": account.balance,
+            "currency": account.currency,
+            "found": True,
+            "cached": False,
+        }

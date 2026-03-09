@@ -19,6 +19,11 @@ class LedgerRepository(ABC):
         ...
 
     @abstractmethod
+    async def insert_many(self, entries: list[LedgerEntry], conn: Connection) -> None:
+        """Insert a new ledger list entries. No updates or deletes allowed."""
+        ...
+
+    @abstractmethod
     async def get_by_account(
         self,
         account_id: uuid.UUID,

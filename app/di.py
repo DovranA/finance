@@ -11,7 +11,7 @@ from dishka import Provider, Scope, provide, make_async_container, AsyncContaine
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.repositories.account_repo import AccountRepository
-from app.domain.repositories.idempotency_repo import TransactionRepository
+from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
 from app.infrastructure.db.connection import create_pool, close_pool
 from app.infrastructure.db.repositories.account_repo_impl import PgAccountRepository

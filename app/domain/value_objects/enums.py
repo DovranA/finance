@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 
 class Currency(StrEnum):
@@ -10,6 +10,8 @@ class Currency(StrEnum):
     EUR = "EUR"
     RUB = "RUB"
     TMT = "TMT"
+    COIN = "COIN"
+    DIAMOND = "DIAMOND"
 
 
 class TransactionStatus(StrEnum):
@@ -31,6 +33,12 @@ class BatchStatus(StrEnum):
     PROCESSED = "processed"
 
 
-class TreasuryAccountType(StrEnum):
-    PLATFORM_FEE = "platform_fee"
+class AccountTypes(StrEnum):
+    USER = "user"
     TREASURY = "treasury"
+    REWARD_POOL = "reward_pool"
+
+
+class LedgerDirection(IntEnum):
+    DIRECTION_DEBIT = -1
+    DIRECTION_CREDIT = 1
