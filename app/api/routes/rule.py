@@ -1,9 +1,160 @@
-from fastapi import APIRouter
+"""Rule REST API endpoints — CRUD + event-driven rule application."""
+
+from __future__ import annotations
+
+import uuid
+
+from fastapi import APIRouter, Query
+from dishka.integrations.fastapi import FromDishka, DishkaRoute
+
+from app.api.schemas.rule import (
+    CreateRuleRequest,
+    UpdateRuleRequest,
+    RuleResponse,
+    RuleListResponse,
+)
+from app.usecases.rule_crud import (
+    CreateRuleUseCase,
+    GetRuleUseCase,
+    ListRulesUseCase,
+    UpdateRuleUseCase,
+    DeleteRuleUseCase,
+)
+from app.usecases.apply_rule import ApplyRuleUseCase
+
+router = APIRouter(prefix="/rules", tags=["Rules"], route_class=DishkaRoute)
 
 
-router = APIRouter(prefix="rule", tags=["Rule"])
+@router.post("", response_model=RuleResponse, status_code=201)
+async def create_rule(
+    data: CreateRuleRequest,
+    uc: FromDishka[CreateRuleUseCase],
+) -> RuleResponse:
+    rule = await uc.execute(
+        event_code=data.event_code,
+        conditions=data.conditions,
+        actions=data.actions,
+        description=data.description,
+        priority=data.priority,
+        expired_at=data.expired_at,
+    )
+    return RuleResponse(
+        id=rule.id,
+        event_code=rule.event_code,
+        description=rule.description,
+        conditions=rule.conditions,
+        actions=rule.actions,
+        priority=rule.priority,
+        is_active=rule.is_active,
+        expired_at=rule.expired_at,
+        created_at=rule.created_at,
+        updated_at=rule.updated_at,
+    )
 
 
-@router.post("")
-async def create_rule():
-    pass
+@router.get("/{rule_id}", response_model=RuleResponse)
+async def get_rule(
+    rule_id: uuid.UUID,
+    uc: FromDishka[GetRuleUseCase],
+) -> RuleResponse:
+    rule = await uc.execute(rule_id=rule_id)
+    return RuleResponse(
+        id=rule.id,
+        event_code=rule.event_code,
+        description=rule.description,
+        conditions=rule.conditions,
+        actions=rule.actions,
+        priority=rule.priority,
+        is_active=rule.is_active,
+        expired_at=rule.expired_at,
+        created_at=rule.created_at,
+        updated_at=rule.updated_at,
+    )
+
+
+@router.get("", response_model=RuleListResponse)
+async def list_rules(
+    uc: FromDishka[ListRulesUseCase],
+    event_code: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> RuleListResponse:
+    rules = await uc.execute(limit=limit, offset=offset, event_code=event_code)
+    return RuleListResponse(
+        rules=[
+            RuleResponse(
+                id=r.id,
+                event_code=r.event_code,
+                description=r.description,
+                conditions=r.conditions,
+                actions=r.actions,
+                priority=r.priority,
+                is_active=r.is_active,
+                expired_at=r.expired_at,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
+            for r in rules
+        ],
+        total=len(rules),
+    )
+
+
+@router.patch("/{rule_id}", response_model=RuleResponse)
+async def update_rule(
+    rule_id: uuid.UUID,
+    data: UpdateRuleRequest,
+    uc: FromDishka[UpdateRuleUseCase],
+) -> RuleResponse:
+    rule = await uc.execute(
+        rule_id=rule_id,
+        event_code=data.event_code,
+        conditions=data.conditions,
+        actions=data.actions,
+        description=data.description,
+        priority=data.priority,
+        is_active=data.is_active,
+        expired_at=data.expired_at,
+    )
+    return RuleResponse(
+        id=rule.id,
+        event_code=rule.event_code,
+        description=rule.description,
+        conditions=rule.conditions,
+        actions=rule.actions,
+        priority=rule.priority,
+        is_active=rule.is_active,
+        expired_at=rule.expired_at,
+        created_at=rule.created_at,
+        updated_at=rule.updated_at,
+    )
+
+
+@router.delete("/{rule_id}")
+async def delete_rule(
+    rule_id: uuid.UUID,
+    uc: FromDishka[DeleteRuleUseCase],
+) -> dict:
+    await uc.execute(rule_id=rule_id)
+    return {"status": "deleted"}
+
+
+@router.post("/apply")
+async def apply_rule(
+    uc: FromDishka[ApplyRuleUseCase],
+    event_code: str = Query(...),
+    account_id: uuid.UUID = Query(...),
+    idempotency_key: str = Query(...),
+    role: str | None = Query(None),
+) -> dict:
+    """Apply all active rules matching the given event_code to the account."""
+    metadata: dict = {}
+    if role:
+        metadata["role"] = role
+    results = await uc.execute(
+        event_code=event_code,
+        account_id=account_id,
+        idempotency_key=idempotency_key,
+        metadata=metadata,
+    )
+    return {"applied_rules": results, "count": len(results)}

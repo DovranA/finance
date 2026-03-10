@@ -26,7 +26,7 @@ class ConditionEngine:
 
         for key, value in conditions.items():
             validator = self.registry.get(key)
-
+            print(key, value)
             if not validator:
                 raise ValueError(f"Unknown condition: {key}")
 

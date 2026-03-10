@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from dishka.integrations.fastapi import setup_dishka
 
 from app.api.routes import accounts
+from app.api.routes import rule
 from app.api.schemas.common import HealthResponse
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
@@ -19,6 +20,7 @@ from app.domain.exceptions import (
     DuplicateOperation,
     InsufficientFunds,
 )
+from app.usecases.rule_crud import RuleNotFound
 
 logger = get_logger(__name__)
 
@@ -40,10 +42,15 @@ def create_app() -> FastAPI:
 
     # ── Register routers ─────────────────────────────────
     app.include_router(accounts.router)
+    app.include_router(rule.router)
 
     # ── Exception handlers ───────────────────────────────
     @app.exception_handler(AccountNotFound)
     async def account_not_found_handler(request: Request, exc: AccountNotFound):
+        return JSONResponse(status_code=404, content={"error": str(exc)})
+
+    @app.exception_handler(RuleNotFound)
+    async def rule_not_found_handler(request: Request, exc: RuleNotFound):
         return JSONResponse(status_code=404, content={"error": str(exc)})
 
     @app.exception_handler(InsufficientFunds)

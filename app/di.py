@@ -13,17 +13,33 @@ from app.core.logging import get_logger
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
+from app.domain.repositories.rule_repo import RuleRepository
+from app.domain.policies.engine import ConditionEngine
+from app.domain.policies.registry import ValidatorRegistry, registry as global_registry
+from app.domain.policies.validators.min_balance import MinBalanceValidator
+from app.domain.policies.validators.role_required import RoleRequiredValidator
+from app.domain.policies.validators.daily_limit import DailyLimitValidator
+from app.domain.policies.validators.one_time_only import OneTimeValidator
 from app.infrastructure.db.connection import create_pool, close_pool
 from app.infrastructure.db.repositories.account_repo_impl import PgAccountRepository
 from app.infrastructure.db.repositories.idempotency_repo_impl import (
     PgTransactionRepository,
 )
 from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerRepository
+from app.infrastructure.db.repositories.rule_repo_impl import PgRuleRepository
 from app.infrastructure.redis.cache import CacheService
 from app.infrastructure.redis.client import create_redis_pool, close_redis
 from app.usecases.get_balance import GetBalanceUseCase
 from app.usecases.set_balance import SetBalanceUseCase
 from app.usecases.transfer import TransferUseCase
+from app.usecases.rule_crud import (
+    CreateRuleUseCase,
+    GetRuleUseCase,
+    ListRulesUseCase,
+    UpdateRuleUseCase,
+    DeleteRuleUseCase,
+)
+from app.usecases.apply_rule import ApplyRuleUseCase
 
 
 logger = get_logger(__name__)
@@ -84,6 +100,28 @@ class RepositoryProvider(Provider):
         PgLedgerRepository,
         provides=LedgerRepository,
     )
+    rule_repo = provide(
+        PgRuleRepository,
+        provides=RuleRepository,
+    )
+
+
+class PolicyProvider(Provider):
+    """Provides the condition engine with all registered validators — APP-scoped."""
+
+    scope = Scope.APP
+
+    @provide
+    def get_registry(self) -> ValidatorRegistry:
+        global_registry.register(MinBalanceValidator())
+        global_registry.register(RoleRequiredValidator())
+        global_registry.register(DailyLimitValidator())
+        global_registry.register(OneTimeValidator())
+        return global_registry
+
+    @provide
+    def get_condition_engine(self, registry: ValidatorRegistry) -> ConditionEngine:
+        return ConditionEngine(registry)
 
 
 class UseCaseProvider(Provider):
@@ -138,6 +176,55 @@ class UseCaseProvider(Provider):
             cache=cache,
         )
 
+    # ── Rule use cases ───────────────────────────────────
+
+    @provide
+    def create_rule_uc(
+        self, pool: Pool, rule_repo: RuleRepository
+    ) -> CreateRuleUseCase:
+        return CreateRuleUseCase(pool=pool, rule_repo=rule_repo)
+
+    @provide
+    def get_rule_uc(self, pool: Pool, rule_repo: RuleRepository) -> GetRuleUseCase:
+        return GetRuleUseCase(pool=pool, rule_repo=rule_repo)
+
+    @provide
+    def list_rules_uc(self, pool: Pool, rule_repo: RuleRepository) -> ListRulesUseCase:
+        return ListRulesUseCase(pool=pool, rule_repo=rule_repo)
+
+    @provide
+    def update_rule_uc(
+        self, pool: Pool, rule_repo: RuleRepository
+    ) -> UpdateRuleUseCase:
+        return UpdateRuleUseCase(pool=pool, rule_repo=rule_repo)
+
+    @provide
+    def delete_rule_uc(
+        self, pool: Pool, rule_repo: RuleRepository
+    ) -> DeleteRuleUseCase:
+        return DeleteRuleUseCase(pool=pool, rule_repo=rule_repo)
+
+    @provide
+    def apply_rule_uc(
+        self,
+        pool: Pool,
+        rule_repo: RuleRepository,
+        account_repo: AccountRepository,
+        transaction_repo: TransactionRepository,
+        ledger_repo: LedgerRepository,
+        condition_engine: ConditionEngine,
+        cache: CacheService | None,
+    ) -> ApplyRuleUseCase:
+        return ApplyRuleUseCase(
+            pool=pool,
+            rule_repo=rule_repo,
+            account_repo=account_repo,
+            transaction_repo=transaction_repo,
+            ledger_repo=ledger_repo,
+            condition_engine=condition_engine,
+            cache=cache,
+        )
+
 
 def create_container() -> AsyncContainer:
     """Build the Dishka async container with all providers."""
@@ -145,5 +232,6 @@ def create_container() -> AsyncContainer:
         ConfigProvider(),
         InfrastructureProvider(),
         RepositoryProvider(),
+        PolicyProvider(),
         UseCaseProvider(),
     )
