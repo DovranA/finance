@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query
 from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
 from app.api.schemas.rule import (
+    ApplyRuleRequest,
     CreateRuleRequest,
     UpdateRuleRequest,
     RuleResponse,
@@ -140,21 +141,16 @@ async def delete_rule(
 
 
 @router.post("/apply")
-async def apply_rule(
-    uc: FromDishka[ApplyRuleUseCase],
-    event_code: str = Query(...),
-    account_id: uuid.UUID = Query(...),
-    idempotency_key: str = Query(...),
-    role: str | None = Query(None),
-) -> dict:
+async def apply_rule(uc: FromDishka[ApplyRuleUseCase], body: ApplyRuleRequest) -> dict:
     """Apply all active rules matching the given event_code to the account."""
     metadata: dict = {}
-    if role:
-        metadata["role"] = role
+    if body.role:
+        metadata["role"] = body.role
+    if body.event_id:
+        metadata["event_id"] = body.event_id
     results = await uc.execute(
-        event_code=event_code,
-        account_id=account_id,
-        idempotency_key=idempotency_key,
+        event_code=body.event_code,
+        user_id=body.user_id,
         metadata=metadata,
     )
     return {"applied_rules": results, "count": len(results)}

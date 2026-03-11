@@ -2,10 +2,49 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+
+def generate_idempotency_key(*parts: str | uuid.UUID | None) -> str:
+    """Build a deterministic idempotency key from any number of components.
+
+    Same inputs always produce the same key.  ``None`` values are skipped.
+
+    Examples::
+
+        generate_idempotency_key("like", account_id, post_id)
+        generate_idempotency_key("transfer", from_id, to_id, amount)
+        generate_idempotency_key("repost", user_id, content_id)
+    """
+    filtered = [str(p) for p in parts if p is not None]
+    if not filtered:
+        return str(uuid.uuid4())
+    raw = ":".join(filtered)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def resolve_idempotency_pattern(pattern: str, context: dict[str, Any]) -> str:
+    """Resolve an idempotency pattern using context values and hash the result.
+
+    Pattern example: ``"{event_code}:{user_id}:{event_id}"``
+
+    All ``{placeholder}`` tokens are replaced with values from *context*.
+    Missing keys are replaced with the literal string ``'none'``.
+    The resolved string is then SHA-256 hashed for a fixed-length key.
+    """
+    import re
+
+    def _replacer(match: re.Match) -> str:
+        key = match.group(1)
+        val = context.get(key)
+        return str(val) if val is not None else "none"
+
+    resolved = re.sub(r"\{(\w+)\}", _replacer, pattern)
+    return hashlib.sha256(resolved.encode()).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -25,14 +64,9 @@ class Transaction:
     expires_at: datetime | None = None
 
     @classmethod
-    def generate_key(
-        cls,
-        event_id: uuid.UUID | None,
-        account_id: uuid.UUID | None,
-    ) -> str:
-        if event_id and account_id:
-            return f"{account_id}:{event_id}"
-        return str(uuid.uuid4())
+    def generate_key(cls, *parts: str | uuid.UUID | None) -> str:
+        """Delegate to the universal generator."""
+        return generate_idempotency_key(*parts)
 
     @classmethod
     def create(

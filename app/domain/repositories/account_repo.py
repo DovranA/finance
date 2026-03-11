@@ -27,6 +27,10 @@ class AccountRepository(ABC):
     async def get_by_owner_id(
         self, user_id: uuid.UUID, conn: Connection
     ) -> Account | None: ...
+    @abstractmethod
+    async def get_by_owner_id_for_update(
+        self, user_id: uuid.UUID, conn: Connection
+    ) -> Account | None: ...
 
     @abstractmethod
     async def get_for_update(

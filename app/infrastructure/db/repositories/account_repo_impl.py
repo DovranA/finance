@@ -27,6 +27,15 @@ class PgAccountRepository(AccountRepository):
         )
         return self._to_entity(row) if row else None
 
+    async def get_by_owner_id_for_update(
+        self, user_id: uuid.UUID, conn: Connection
+    ) -> Account | None:
+        row = await conn.fetchrow(
+            f"SELECT {_SELECT_COLS} FROM accounts WHERE user_id = $1 FOR UPDATE",
+            user_id,
+        )
+        return self._to_entity(row) if row else None
+
     async def get_by_owner_id(
         self, user_id: uuid.UUID, conn: Connection
     ) -> Account | None:

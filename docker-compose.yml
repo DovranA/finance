@@ -87,7 +87,15 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
-
+  redisinsight-finance:
+    image: redis/redisinsight:latest
+    container_name: ${DOCKER_COMPOSE_PROJECT_NAME}-redisinsight-1
+    ports:
+      - 5540:5540
+    networks:
+      - finance-network
+    depends_on:
+      - redis
 volumes:
   pgdata:
   redisdata:

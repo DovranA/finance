@@ -11,6 +11,7 @@ from app.domain.entities.rule import Rule
 from app.domain.exceptions import DomainError
 from app.domain.repositories.rule_repo import RuleRepository
 from app.infrastructure.db.transaction import transaction
+from app.infrastructure.redis.cache import CacheService
 
 
 class RuleNotFound(DomainError):
@@ -18,9 +19,12 @@ class RuleNotFound(DomainError):
 
 
 class CreateRuleUseCase:
-    def __init__(self, pool: Pool, rule_repo: RuleRepository) -> None:
+    def __init__(
+        self, pool: Pool, rule_repo: RuleRepository, cache: CacheService | None = None
+    ) -> None:
         self._pool = pool
         self._rule_repo = rule_repo
+        self._cache = cache
 
     async def execute(
         self,
@@ -42,6 +46,8 @@ class CreateRuleUseCase:
         )
         async with transaction(self._pool) as conn:
             await self._rule_repo.create(rule, conn)
+        if self._cache:
+            await self._cache.invalidate_rules(event_code)
         return rule
 
 
@@ -73,9 +79,12 @@ class ListRulesUseCase:
 
 
 class UpdateRuleUseCase:
-    def __init__(self, pool: Pool, rule_repo: RuleRepository) -> None:
+    def __init__(
+        self, pool: Pool, rule_repo: RuleRepository, cache: CacheService | None = None
+    ) -> None:
         self._pool = pool
         self._rule_repo = rule_repo
+        self._cache = cache
 
     async def execute(
         self,
@@ -111,13 +120,18 @@ class UpdateRuleUseCase:
 
             rule.updated_at = datetime.now(timezone.utc)
             await self._rule_repo.update(rule, conn)
+        if self._cache:
+            await self._cache.invalidate_rules(rule.event_code)
         return rule
 
 
 class DeleteRuleUseCase:
-    def __init__(self, pool: Pool, rule_repo: RuleRepository) -> None:
+    def __init__(
+        self, pool: Pool, rule_repo: RuleRepository, cache: CacheService | None = None
+    ) -> None:
         self._pool = pool
         self._rule_repo = rule_repo
+        self._cache = cache
 
     async def execute(self, *, rule_id: uuid.UUID) -> None:
         async with transaction(self._pool) as conn:
@@ -125,3 +139,5 @@ class DeleteRuleUseCase:
             if rule is None:
                 raise RuleNotFound(f"Rule {rule_id} not found")
             await self._rule_repo.delete(rule_id, conn)
+        if self._cache:
+            await self._cache.invalidate_rules(rule.event_code)

@@ -44,3 +44,10 @@ class RuleResponse(BaseModel):
 class RuleListResponse(BaseModel):
     rules: list[RuleResponse]
     total: int
+
+
+class ApplyRuleRequest(BaseModel):
+    event_code: str = Field(min_length=1)
+    user_id: uuid.UUID
+    event_id: uuid.UUID | None = uuid.uuid4()
+    role: str = "simple"

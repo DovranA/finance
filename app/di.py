@@ -22,7 +22,7 @@ from app.domain.policies.validators.daily_limit import DailyLimitValidator
 from app.domain.policies.validators.one_time_only import OneTimeValidator
 from app.infrastructure.db.connection import create_pool, close_pool
 from app.infrastructure.db.repositories.account_repo_impl import PgAccountRepository
-from app.infrastructure.db.repositories.idempotency_repo_impl import (
+from app.infrastructure.db.repositories.transaction_repo_impl import (
     PgTransactionRepository,
 )
 from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerRepository
@@ -112,11 +112,11 @@ class PolicyProvider(Provider):
     scope = Scope.APP
 
     @provide
-    def get_registry(self) -> ValidatorRegistry:
+    def get_registry(self, cache: CacheService | None) -> ValidatorRegistry:
         global_registry.register(MinBalanceValidator())
         global_registry.register(RoleRequiredValidator())
         global_registry.register(DailyLimitValidator())
-        global_registry.register(OneTimeValidator())
+        global_registry.register(OneTimeValidator(cache=cache))
         return global_registry
 
     @provide
@@ -180,9 +180,9 @@ class UseCaseProvider(Provider):
 
     @provide
     def create_rule_uc(
-        self, pool: Pool, rule_repo: RuleRepository
+        self, pool: Pool, rule_repo: RuleRepository, cache: CacheService | None
     ) -> CreateRuleUseCase:
-        return CreateRuleUseCase(pool=pool, rule_repo=rule_repo)
+        return CreateRuleUseCase(pool=pool, rule_repo=rule_repo, cache=cache)
 
     @provide
     def get_rule_uc(self, pool: Pool, rule_repo: RuleRepository) -> GetRuleUseCase:
@@ -194,15 +194,15 @@ class UseCaseProvider(Provider):
 
     @provide
     def update_rule_uc(
-        self, pool: Pool, rule_repo: RuleRepository
+        self, pool: Pool, rule_repo: RuleRepository, cache: CacheService | None
     ) -> UpdateRuleUseCase:
-        return UpdateRuleUseCase(pool=pool, rule_repo=rule_repo)
+        return UpdateRuleUseCase(pool=pool, rule_repo=rule_repo, cache=cache)
 
     @provide
     def delete_rule_uc(
-        self, pool: Pool, rule_repo: RuleRepository
+        self, pool: Pool, rule_repo: RuleRepository, cache: CacheService | None
     ) -> DeleteRuleUseCase:
-        return DeleteRuleUseCase(pool=pool, rule_repo=rule_repo)
+        return DeleteRuleUseCase(pool=pool, rule_repo=rule_repo, cache=cache)
 
     @provide
     def apply_rule_uc(

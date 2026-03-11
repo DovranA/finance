@@ -13,9 +13,9 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 # TTLs in seconds
-ECONOMIC_CONFIG_TTL = 300       # 5 minutes
-IDEMPOTENCY_TTL = 3600          # 1 hour
-BALANCE_CACHE_TTL = 60          # 1 minute
+ECONOMIC_CONFIG_TTL = 300  # 5 minutes
+IDEMPOTENCY_TTL = 3600  # 1 hour
+BALANCE_CACHE_TTL = 60  # 1 minute
 
 
 class CacheService:
@@ -46,6 +46,42 @@ class CacheService:
         key = f"econ:config:{action_code.upper()}"
         await self._redis.delete(key)
 
+    # ── Rule Cache ──────────────────────
+
+    RULES_CACHE_TTL = 300  # 5 minutes
+
+    async def get_cached_rules(self, event_code: str) -> list[dict[str, Any]] | None:
+        key = f"rules:{event_code}"
+        data = await self._redis.get(key)
+        if data is None:
+            return None
+        return orjson.loads(data)
+
+    async def set_cached_rules(
+        self, event_code: str, rules: list[dict[str, Any]]
+    ) -> None:
+        key = f"rules:{event_code}"
+        await self._redis.set(key, orjson.dumps(rules), ex=self.RULES_CACHE_TTL)
+
+    async def invalidate_rules(self, event_code: str | None = None) -> None:
+        if event_code:
+            await self._redis.delete(f"rules:{event_code}")
+        else:
+            async for key in self._redis.scan_iter(match="rules:*"):
+                await self._redis.delete(key)
+
+    # ── One-Time-Per-Event Cache (1 day) ──────────────────
+
+    ONE_TIME_TTL = 86400  # 1 day
+
+    async def is_one_time_done(self, account_id: uuid.UUID, event_id: str) -> bool:
+        key = f"ot:{account_id}:{event_id}"
+        return await self._redis.exists(key) == 1
+
+    async def mark_one_time_done(self, account_id: uuid.UUID, event_id: str) -> None:
+        key = f"ot:{account_id}:{event_id}"
+        await self._redis.set(key, "1", ex=self.ONE_TIME_TTL)
+
     # ── Idempotency Short-TTL Cache ──────────────────────
 
     async def is_event_processed(self, event_id: uuid.UUID) -> bool:
@@ -64,9 +100,7 @@ class CacheService:
         val = await self._redis.get(key)
         return int(val) if val is not None else None
 
-    async def set_cached_balance(
-        self, account_id: uuid.UUID, balance: int
-    ) -> None:
+    async def set_cached_balance(self, account_id: uuid.UUID, balance: int) -> None:
         key = f"bal:{account_id}"
         await self._redis.set(key, str(balance), ex=BALANCE_CACHE_TTL)
 
