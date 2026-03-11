@@ -5,7 +5,29 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
+
+
+# @dataclass
+# class RuleCondition:
+#     """Typed representation of a rule's conditions JSONB."""
+
+#     min_balance: Optional[int] = None
+#     role_required: Optional[list[str]] = None
+#     one_time_only: Optional[bool] = None
+#     daily_limit: Optional[int] = None
+#     required_metadata: Optional[list[str]] = None
+#     idempotency_pattern: Optional[str] = None
+
+
+# @dataclass
+# class RuleAction:
+#     """Typed representation of a rule's actions JSONB."""
+
+#     direction: int = 1  # 1 = credit, -1 = debit
+#     amount: Optional[int] = None
+#     reward: Optional[int] = None
+#     currency: str = "TMT"
 
 
 @dataclass

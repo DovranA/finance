@@ -16,7 +16,7 @@ from app.domain.entities.idempotency_key import (
 )
 from app.domain.entities.ledger_entry import LedgerEntry
 from app.domain.entities.rule import Rule
-from app.domain.exceptions import AccountNotFound
+from app.domain.exceptions import AccountNotFound, DomainError
 from app.domain.policies.engine import ConditionEngine
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
@@ -62,37 +62,41 @@ class ApplyRuleUseCase:
         metadata = metadata or {}
         metadata["event_code"] = event_code
         results: list[dict] = []
+        try:
+            async with transaction(self._pool) as conn:
+                rules = await self._fetch_rules(event_code, conn)
+                if not rules:
+                    logger.info("no_active_rules", event_code=event_code)
+                    return results
 
-        async with transaction(self._pool) as conn:
-            rules = await self._fetch_rules(event_code, conn)
-            if not rules:
-                logger.info("no_active_rules", event_code=event_code)
-                return results
-
-            account = await self._account_repo.get_by_owner_id_for_update(user_id, conn)
-            if account is None:
-                raise AccountNotFound(f"Account {user_id} not found")
-            account.ensure_active()
-
-            treasury = await self._account_repo.get_by_account_type(
-                AccountTypes.TREASURY, conn
-            )
-
-            for rule in rules:
-                result = await self._apply_single_rule(
-                    rule=rule,
-                    account=account,
-                    treasury=treasury,
-                    event_code=event_code,
-                    user_id=user_id,
-                    metadata=metadata,
-                    conn=conn,
+                account = await self._account_repo.get_by_owner_id_for_update(
+                    user_id, conn
                 )
-                if result:
-                    results.append(result)
+                if account is None:
+                    raise AccountNotFound(f"Account {user_id} not   found")
+                account.ensure_active()
 
-            await self._invalidate_caches(account.id, treasury)
+                treasury = await self._account_repo.get_by_account_type(
+                    AccountTypes.TREASURY, conn
+                )
 
+                for rule in rules:
+                    result = await self._apply_single_rule(
+                        rule=rule,
+                        account=account,
+                        treasury=treasury,
+                        event_code=event_code,
+                        user_id=user_id,
+                        metadata=metadata,
+                        conn=conn,
+                    )
+
+                    if result:
+                        results.append(result)
+
+                await self._invalidate_caches(account.id, treasury)
+        except ValueError as e:
+            raise DomainError(e)
         return results
 
     # ── Rule fetching (cache → DB) ───────────────────────
@@ -163,9 +167,12 @@ class ApplyRuleUseCase:
         metadata: dict,
         conn: Connection,
     ) -> dict | None:
-        await self._condition_engine.validate(
-            rule.conditions, account=account, metadata=metadata, conn=conn
-        )
+        try:
+            await self._condition_engine.validate(
+                rule.conditions, account=account, metadata=metadata, conn=conn
+            )
+        except ValueError as e:
+            return {"unsuccess": f"Error on: {e}"}
 
         actions = rule.actions
         direction = LedgerDirection(actions.get("direction", 1))

@@ -4,16 +4,35 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
+
+
+class RuleCondition(BaseModel):
+    """Typed representation of a rule's conditions JSONB."""
+
+    min_balance: Optional[int] = None
+    role_required: Optional[list[str]] = None
+    one_time_only: Optional[bool] = None
+    daily_limit: Optional[int] = None
+    required_metadata: Optional[list[str]] = None
+    idempotency_pattern: Optional[str] = None
+
+
+class RuleAction(BaseModel):
+    """Typed representation of a rule's actions JSONB."""
+
+    direction: int = 1  # 1 = credit, -1 = debit
+    amount: int = 0
+    currency: str = "TMT"
 
 
 class CreateRuleRequest(BaseModel):
     event_code: str = Field(..., min_length=1, max_length=128)
     description: str | None = None
-    conditions: dict[str, Any] = Field(default_factory=dict)
-    actions: dict[str, Any] = Field(default_factory=dict)
+    conditions: RuleCondition = Field(default_factory=dict)
+    actions: RuleAction = Field(default_factory=dict)
     priority: int = 0
     expired_at: datetime | None = None
 
@@ -51,3 +70,4 @@ class ApplyRuleRequest(BaseModel):
     user_id: uuid.UUID
     event_id: uuid.UUID | None = uuid.uuid4()
     role: str = "simple"
+    metadata: dict[str, Any] | None = Field(default_factory=dict)

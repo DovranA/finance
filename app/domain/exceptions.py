@@ -23,3 +23,7 @@ class AccountInactive(DomainError):
 
 class CurrencyMismatch(DomainError):
     """Raised when currencies don't match in a transaction."""
+
+
+class RuleAlreadyExists(DomainError):
+    """Raised when a rule with the same event_code already exists."""

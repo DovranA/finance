@@ -6,9 +6,10 @@ import uuid
 from datetime import datetime, timezone
 
 from asyncpg import Pool
+from asyncpg.exceptions import UniqueViolationError
 
 from app.domain.entities.rule import Rule
-from app.domain.exceptions import DomainError
+from app.domain.exceptions import DomainError, RuleAlreadyExists
 from app.domain.repositories.rule_repo import RuleRepository
 from app.infrastructure.db.transaction import transaction
 from app.infrastructure.redis.cache import CacheService
@@ -36,6 +37,8 @@ class CreateRuleUseCase:
         priority: int = 0,
         expired_at: datetime | None = None,
     ) -> Rule:
+        print(f"condition:{conditions}")
+        print(f"action:{actions}")
         rule = Rule.create(
             event_code=event_code,
             conditions=conditions,
@@ -44,8 +47,14 @@ class CreateRuleUseCase:
             priority=priority,
             expired_at=expired_at,
         )
-        async with transaction(self._pool) as conn:
-            await self._rule_repo.create(rule, conn)
+        print(rule)
+        try:
+            async with transaction(self._pool) as conn:
+                await self._rule_repo.create(rule, conn)
+        except UniqueViolationError:
+            raise RuleAlreadyExists(
+                f"Rule with event_code '{event_code}' already exists"
+            )
         if self._cache:
             await self._cache.invalidate_rules(event_code)
         return rule
@@ -119,7 +128,12 @@ class UpdateRuleUseCase:
                 rule.expired_at = expired_at
 
             rule.updated_at = datetime.now(timezone.utc)
-            await self._rule_repo.update(rule, conn)
+            try:
+                await self._rule_repo.update(rule, conn)
+            except UniqueViolationError:
+                raise RuleAlreadyExists(
+                    f"Rule with event_code '{rule.event_code}' already exists"
+                )
         if self._cache:
             await self._cache.invalidate_rules(rule.event_code)
         return rule

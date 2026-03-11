@@ -20,6 +20,7 @@ from app.domain.policies.validators.min_balance import MinBalanceValidator
 from app.domain.policies.validators.role_required import RoleRequiredValidator
 from app.domain.policies.validators.daily_limit import DailyLimitValidator
 from app.domain.policies.validators.one_time_only import OneTimeValidator
+from app.domain.policies.validators.required_metadata import RequiredMetadataValidator
 from app.infrastructure.db.connection import create_pool, close_pool
 from app.infrastructure.db.repositories.account_repo_impl import PgAccountRepository
 from app.infrastructure.db.repositories.transaction_repo_impl import (
@@ -117,6 +118,7 @@ class PolicyProvider(Provider):
         global_registry.register(RoleRequiredValidator())
         global_registry.register(DailyLimitValidator())
         global_registry.register(OneTimeValidator(cache=cache))
+        global_registry.register(RequiredMetadataValidator())
         return global_registry
 
     @provide

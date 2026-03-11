@@ -1,25 +1,27 @@
-from uuid import UUID
-import uuid
+from __future__ import annotations
 
-from asyncpg import Pool
+import uuid
+from uuid import UUID
+
+from asyncpg import Connection, Pool
 
 from app.core.logging import get_logger
+from app.domain.entities.account import Account
 from app.domain.entities.idempotency_key import Transaction
 from app.domain.entities.ledger_entry import LedgerEntry
-from app.domain.exceptions import AccountNotFound, CurrencyMismatch
+from app.domain.exceptions import AccountNotFound, InsufficientFunds
 from app.domain.repositories.account_repo import AccountRepository
-from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
+from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.value_objects.enums import AccountTypes, LedgerDirection
 from app.infrastructure.db.transaction import transaction
 from app.infrastructure.redis.cache import CacheService
-
 
 logger = get_logger(__name__)
 
 
 class SetBalanceUseCase:
-    """Set account balance for a user. This is a write operation and should be used with caution."""
+    """Set account balance for a user."""
 
     def __init__(
         self,
@@ -35,73 +37,129 @@ class SetBalanceUseCase:
         self._ledger_repo = ledger_repo
         self._cache = cache
 
-    async def execute(self, user_id: UUID, new_balance: int):
+    # ── Public entry point ───────────────────────────────
 
+    async def execute(self, user_id: UUID, new_balance: int) -> dict:
         async with transaction(self._pool) as conn:
-            account = await self._account_repo.get_for_update(user_id, conn)
-            pool = await self._account_repo.get_by_account_type(
-                AccountTypes.TREASURY, conn
-            )
-            if not pool:
-                raise AccountNotFound(f"{AccountTypes.TREASURY} not fount")
-            if pool.balance <= new_balance:
-                raise CurrencyMismatch("On Pool low balance")
-            current_balance = account.balance
-            delta = new_balance - current_balance
+            account = await self._get_or_create_account(user_id, conn)
+            treasury = await self._get_treasury(conn)
 
+            delta = new_balance - account.balance
             if delta == 0:
-                return
+                return self._build_response(user_id, account)
 
-            tx = Transaction.create(
-                idempotency_key=f"set_balance:{account.id}:{uuid.uuid4()}",
-                reference_type="REST_API",
-                reference_id=str(account.id),
-            )
+            if delta > 0 and treasury.balance < delta:
+                raise InsufficientFunds("Treasury has insufficient balance")
 
-            await self._transaction_repo.save(tx, conn)
-
-            await self._ledger_repo.insert_many(
-                [
-                    LedgerEntry.create(
-                        account_id=pool.id,
-                        transaction_id=tx.id,
-                        amount=abs(delta),
-                        direction=(
-                            LedgerDirection.DIRECTION_DEBIT
-                            if delta > 0
-                            else LedgerDirection.DIRECTION_CREDIT
-                        ),
-                    ),
-                    LedgerEntry.create(
-                        account_id=account.id,
-                        transaction_id=tx.id,
-                        amount=abs(delta),
-                        direction=(
-                            LedgerDirection.DIRECTION_CREDIT
-                            if delta > 0
-                            else LedgerDirection.DIRECTION_DEBIT
-                        ),
-                    ),
-                ],
-                conn,
-            )
-            if delta > 0:
-                await self._account_repo.debit(pool.id, abs(delta), conn)
-                await self._account_repo.credit(account.id, abs(delta), conn)
-            else:
-                await self._account_repo.credit(pool.id, abs(delta), conn)
-                await self._account_repo.debit(account.id, abs(delta), conn)
-            account.balance = new_balance
+            tx = await self._record_transaction(account, conn)
+            await self._apply_balance_transfer(account, treasury, tx.id, delta, conn)
+            await self._write_ledger_entries(account, treasury, tx.id, delta, conn)
             await self._transaction_repo.mark_completed(tx.idempotency_key, conn)
-            if self._cache:
-                await self._cache.set_cached_balance(account.id, account.balance)
-                await self._cache.set_cached_balance(pool.id, account.balance)
 
+            account.balance = new_balance
+
+        await self._update_caches(account, treasury)
+        return self._build_response(user_id, account)
+
+    # ── Account resolution ───────────────────────────────
+
+    async def _get_or_create_account(self, user_id: UUID, conn: Connection) -> Account:
+        account = await self._account_repo.get_by_owner_id(user_id, conn)
+        if not account:
+            new_account = Account.create(user_id, owner_type="user")
+            await self._account_repo.create(new_account, conn=conn)
+            account = new_account
+        return account
+
+    async def _get_treasury(self, conn: Connection) -> Account:
+        treasury = await self._account_repo.get_by_account_type(
+            AccountTypes.TREASURY, conn
+        )
+        if not treasury:
+            raise AccountNotFound("Treasury account not found")
+        return treasury
+
+    # ── Transaction & ledger ─────────────────────────────
+
+    async def _record_transaction(
+        self, account: Account, conn: Connection
+    ) -> Transaction:
+        tx = Transaction.create(
+            idempotency_key=f"set_balance:{account.id}:{uuid.uuid4()}",
+            reference_type="REST_API",
+            reference_id=str(account.id),
+        )
+        await self._transaction_repo.save(tx, conn)
+        return tx
+
+    async def _apply_balance_transfer(
+        self,
+        account: Account,
+        treasury: Account,
+        tx_id: UUID,
+        delta: int,
+        conn: Connection,
+    ) -> None:
+        amount = abs(delta)
+        if delta > 0:
+            await self._account_repo.debit(treasury.id, amount, conn)
+            await self._account_repo.credit(account.id, amount, conn)
+        else:
+            await self._account_repo.credit(treasury.id, amount, conn)
+            await self._account_repo.debit(account.id, amount, conn)
+
+    async def _write_ledger_entries(
+        self,
+        account: Account,
+        treasury: Account,
+        tx_id: UUID,
+        delta: int,
+        conn: Connection,
+    ) -> None:
+        amount = abs(delta)
+        user_dir = (
+            LedgerDirection.DIRECTION_CREDIT
+            if delta > 0
+            else LedgerDirection.DIRECTION_DEBIT
+        )
+        treasury_dir = (
+            LedgerDirection.DIRECTION_DEBIT
+            if delta > 0
+            else LedgerDirection.DIRECTION_CREDIT
+        )
+        await self._ledger_repo.insert_many(
+            [
+                LedgerEntry.create(
+                    account_id=treasury.id,
+                    transaction_id=tx_id,
+                    amount=amount,
+                    direction=treasury_dir,
+                ),
+                LedgerEntry.create(
+                    account_id=account.id,
+                    transaction_id=tx_id,
+                    amount=amount,
+                    direction=user_dir,
+                ),
+            ],
+            conn,
+        )
+
+    # ── Cache ────────────────────────────────────────────
+
+    async def _update_caches(self, account: Account, treasury: Account) -> None:
+        if self._cache:
+            await self._cache.invalidate_balance(account.id)
+            await self._cache.invalidate_balance(treasury.id)
+
+    # ── Response ─────────────────────────────────────────
+
+    @staticmethod
+    def _build_response(user_id: UUID, account: Account) -> dict:
         return {
             "user_id": str(user_id),
             "account_id": str(account.id),
             "balance": account.balance,
             "currency": account.currency,
             "found": True,
-            "cached": False,
         }

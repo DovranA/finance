@@ -58,6 +58,7 @@ class PgRuleRepository(RuleRepository):
         return [self._to_entity(r) for r in rows]
 
     async def create(self, rule: Rule, conn: Connection) -> None:
+
         await conn.execute(
             "INSERT INTO rules "
             "(id, event_code, description, conditions, actions, "

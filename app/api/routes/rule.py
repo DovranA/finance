@@ -33,8 +33,8 @@ async def create_rule(
 ) -> RuleResponse:
     rule = await uc.execute(
         event_code=data.event_code,
-        conditions=data.conditions,
-        actions=data.actions,
+        conditions=data.conditions.model_dump(exclude_none=True),
+        actions=data.actions.model_dump(exclude_none=True),
         description=data.description,
         priority=data.priority,
         expired_at=data.expired_at,
@@ -143,14 +143,13 @@ async def delete_rule(
 @router.post("/apply")
 async def apply_rule(uc: FromDishka[ApplyRuleUseCase], body: ApplyRuleRequest) -> dict:
     """Apply all active rules matching the given event_code to the account."""
-    metadata: dict = {}
     if body.role:
-        metadata["role"] = body.role
+        body.metadata["role"] = body.role
     if body.event_id:
-        metadata["event_id"] = body.event_id
+        body.metadata["event_id"] = body.event_id
     results = await uc.execute(
         event_code=body.event_code,
         user_id=body.user_id,
-        metadata=metadata,
+        metadata=body.metadata,
     )
     return {"applied_rules": results, "count": len(results)}
