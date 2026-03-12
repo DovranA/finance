@@ -83,7 +83,9 @@ class ListRulesUseCase:
     ) -> list[Rule]:
         async with transaction(self._pool) as conn:
             if event_code:
-                return await self._rule_repo.get_by_event_code(event_code, conn)
+                rules = await self._rule_repo.get_by_event_code(event_code, conn)
+                print(f"Rules from list: {rules}")
+                return rules
             return await self._rule_repo.list_all(conn, limit=limit, offset=offset)
 
 

@@ -90,7 +90,8 @@ class ApplyRuleUseCase:
                         metadata=metadata,
                         conn=conn,
                     )
-
+                    print(rule.description)
+                    print(result)
                     if result:
                         results.append(result)
 
@@ -115,7 +116,7 @@ class ApplyRuleUseCase:
 
     @staticmethod
     def _deserialize_rules(raw: list[dict]) -> list[Rule]:
-        return [
+        rules = [
             Rule(
                 id=uuid.UUID(r["id"]),
                 event_code=r["event_code"],
@@ -133,8 +134,8 @@ class ApplyRuleUseCase:
                 updated_at=datetime.fromisoformat(r["updated_at"]),
             )
             for r in raw
-            if r.get("is_active", True)
         ]
+        return [r for r in rules if r.is_usable]
 
     @staticmethod
     def _serialize_rules(rules: list[Rule]) -> list[dict]:
@@ -204,6 +205,7 @@ class ApplyRuleUseCase:
 
         await self._transaction_repo.mark_completed(rule_idem_key, conn)
         await self._mark_one_time(rule, account.id, rule_idem_key)
+        await self._incr_daily_count(rule, account.id, event_code)
 
         return {
             "rule_id": str(rule.id),
@@ -325,6 +327,12 @@ class ApplyRuleUseCase:
     ) -> None:
         if self._cache and rule.conditions.get("one_time_only"):
             await self._cache.mark_one_time_done(account_id, idem_key)
+
+    async def _incr_daily_count(
+        self, rule: Rule, account_id: uuid.UUID, event_code: str
+    ) -> None:
+        if self._cache and rule.conditions.get("daily_limit"):
+            await self._cache.incr_daily_count(account_id, event_code)
 
     async def _invalidate_caches(
         self, account_id: uuid.UUID, treasury: Account | None

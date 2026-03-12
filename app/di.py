@@ -116,7 +116,7 @@ class PolicyProvider(Provider):
     def get_registry(self, cache: CacheService | None) -> ValidatorRegistry:
         global_registry.register(MinBalanceValidator())
         global_registry.register(RoleRequiredValidator())
-        global_registry.register(DailyLimitValidator())
+        global_registry.register(DailyLimitValidator(cache=cache))
         global_registry.register(OneTimeValidator(cache=cache))
         global_registry.register(RequiredMetadataValidator())
         return global_registry

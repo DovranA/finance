@@ -107,3 +107,27 @@ class CacheService:
     async def invalidate_balance(self, account_id: uuid.UUID) -> None:
         key = f"bal:{account_id}"
         await self._redis.delete(key)
+
+    # ── Daily Limit Cache ────────────────────────────────
+
+    DAILY_LIMIT_TTL = 86400  # 24 hours
+
+    async def get_daily_count(
+        self, account_id: uuid.UUID, event_code: str
+    ) -> int | None:
+        key = f"daily:{account_id}:{event_code}"
+        val = await self._redis.get(key)
+        return int(val) if val is not None else None
+
+    async def set_daily_count(
+        self, account_id: uuid.UUID, event_code: str, count: int
+    ) -> None:
+        key = f"daily:{account_id}:{event_code}"
+        await self._redis.set(key, str(count), ex=self.DAILY_LIMIT_TTL)
+
+    async def incr_daily_count(self, account_id: uuid.UUID, event_code: str) -> int:
+        key = f"daily:{account_id}:{event_code}"
+        new_val = await self._redis.incr(key)
+        if new_val == 1:
+            await self._redis.expire(key, self.DAILY_LIMIT_TTL)
+        return new_val

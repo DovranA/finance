@@ -44,6 +44,7 @@ def resolve_idempotency_pattern(pattern: str, context: dict[str, Any]) -> str:
         return str(val) if val is not None else "none"
 
     resolved = re.sub(r"\{(\w+)\}", _replacer, pattern)
+    print(resolved)
     return hashlib.sha256(resolved.encode()).hexdigest()
 
 
