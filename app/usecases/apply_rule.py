@@ -167,6 +167,12 @@ class ApplyRuleUseCase:
         metadata: dict,
         conn: Connection,
     ) -> dict | None:
+        # Resolve idempotency key BEFORE validation so one_time_only can use it
+        rule_idem_key = self._resolve_idem_key(
+            rule, event_code, user_id, account.id, uuid.uuid4().hex, metadata
+        )
+        metadata["idempotency_key"] = rule_idem_key
+
         try:
             await self._condition_engine.validate(
                 rule.conditions, account=account, metadata=metadata, conn=conn
@@ -179,10 +185,6 @@ class ApplyRuleUseCase:
         amount = actions.get("reward", actions.get("amount", 0))
         if amount <= 0:
             return None
-
-        rule_idem_key = self._resolve_idem_key(
-            rule, event_code, user_id, account.id, uuid.uuid4().hex, metadata
-        )
 
         if await self._is_already_applied(rule.id, rule_idem_key, conn):
             return None
@@ -201,7 +203,7 @@ class ApplyRuleUseCase:
         )
 
         await self._transaction_repo.mark_completed(rule_idem_key, conn)
-        await self._mark_one_time(rule, account.id, metadata)
+        await self._mark_one_time(rule, account.id, rule_idem_key)
 
         return {
             "rule_id": str(rule.id),
@@ -319,12 +321,10 @@ class ApplyRuleUseCase:
     # ── Cache helpers ────────────────────────────────────
 
     async def _mark_one_time(
-        self, rule: Rule, account_id: uuid.UUID, metadata: dict
+        self, rule: Rule, account_id: uuid.UUID, idem_key: str
     ) -> None:
         if self._cache and rule.conditions.get("one_time_only"):
-            event_id = metadata.get("event_id")
-            if event_id:
-                await self._cache.mark_one_time_done(account_id, str(event_id))
+            await self._cache.mark_one_time_done(account_id, idem_key)
 
     async def _invalidate_caches(
         self, account_id: uuid.UUID, treasury: Account | None

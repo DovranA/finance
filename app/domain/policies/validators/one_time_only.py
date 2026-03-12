@@ -26,24 +26,24 @@ class OneTimeValidator(ConditionValidator):
         if not value:
             return
 
-        event_id = str(metadata["event_id"])
+        # Use the resolved idempotency key from the rule pattern
+        idem_key = metadata.get("idempotency_key", "")
+        if not idem_key:
+            return
 
         # 1. Check Redis cache first
         if self._cache:
-            if await self._cache.is_one_time_done(account.id, event_id):
-                raise DuplicateOperation(f"event:{event_id}")
+            if await self._cache.is_one_time_done(account.id, idem_key):
+                raise DuplicateOperation(f"one_time:{idem_key}")
 
-        # 2. Fallback to DB
+        # 2. Fallback to DB — check by idempotency_key in transactions
         exists = await conn.fetchval(
-            "SELECT 1 FROM ledger_entries le "
-            "JOIN transactions t ON t.id = le.transaction_id "
-            "WHERE le.account_id = $1 AND t.reference_id = $2 LIMIT 1",
-            account.id,
-            event_id,
+            "SELECT 1 FROM transactions "
+            "WHERE idempotency_key = $1 AND status = 'completed' LIMIT 1",
+            idem_key,
         )
 
         if exists:
-            # Warm cache so next check skips DB
             if self._cache:
-                await self._cache.mark_one_time_done(account.id, event_id)
-            raise DuplicateOperation(f"event:{event_id}")
+                await self._cache.mark_one_time_done(account.id, idem_key)
+            raise DuplicateOperation(f"one_time:{idem_key}")
