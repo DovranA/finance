@@ -33,17 +33,17 @@ class PgRuleRepository(RuleRepository):
 
     async def get_active_by_event_code(
         self, event_code: str, conn: Connection
-    ) -> list[Rule]:
-        rows = await conn.fetch(
+    ) -> Rule | None:
+        row = await conn.fetchrow(
             "SELECT id, event_code, description, conditions, actions, "
             "priority, is_active, expired_at, created_at, updated_at "
             "FROM rules "
             "WHERE event_code = $1 AND is_active = TRUE "
             "AND (expired_at IS NULL OR expired_at > NOW()) "
-            "ORDER BY priority DESC",
+            "ORDER BY priority DESC LIMIT 1",
             event_code,
         )
-        return [self._to_entity(r) for r in rows]
+        return self._to_entity(row) if row else None
 
     async def list_all(
         self, conn: Connection, limit: int = 50, offset: int = 0

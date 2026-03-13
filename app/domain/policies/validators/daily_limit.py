@@ -32,9 +32,13 @@ class DailyLimitValidator(ConditionValidator):
         # 1. Check Redis cache first
         if self._cache:
             count = await self._cache.get_daily_count(account.id, event_code)
+            print(count)
+            print(value)
             if count is not None:
                 if count >= value:
+                    print("this part work correctly")
                     raise DailyLimitExceeded("Daily limit exceeded")
+                print("pass")
                 return
 
         # 2. Fallback to DB

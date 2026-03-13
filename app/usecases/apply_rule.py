@@ -58,16 +58,15 @@ class ApplyRuleUseCase:
         event_code: str,
         user_id: uuid.UUID,
         metadata: dict | None = None,
-    ) -> list[dict]:
+    ) -> dict | None:
         metadata = metadata or {}
         metadata["event_code"] = event_code
-        results: list[dict] = []
         try:
             async with transaction(self._pool) as conn:
-                rules = await self._fetch_rules(event_code, conn)
-                if not rules:
+                rule = await self._fetch_rules(event_code, conn)
+                if not rule:
                     logger.info("no_active_rules", event_code=event_code)
-                    return results
+                    return None
 
                 account = await self._account_repo.get_by_owner_id_for_update(
                     user_id, conn
@@ -80,39 +79,37 @@ class ApplyRuleUseCase:
                     AccountTypes.TREASURY, conn
                 )
 
-                for rule in rules:
-                    result = await self._apply_single_rule(
-                        rule=rule,
-                        account=account,
-                        treasury=treasury,
-                        event_code=event_code,
-                        user_id=user_id,
-                        metadata=metadata,
-                        conn=conn,
-                    )
-                    print(rule.description)
-                    print(result)
-                    if result:
-                        results.append(result)
+                result = await self._apply_single_rule(
+                    rule=rule,
+                    account=account,
+                    treasury=treasury,
+                    event_code=event_code,
+                    user_id=user_id,
+                    metadata=metadata,
+                    conn=conn,
+                )
 
                 await self._invalidate_caches(account.id, treasury)
         except ValueError as e:
             raise DomainError(e)
-        return results
+        return result
 
     # ── Rule fetching (cache → DB) ───────────────────────
 
-    async def _fetch_rules(self, event_code: str, conn: Connection) -> list[Rule]:
+    async def _fetch_rules(self, event_code: str, conn: Connection) -> Rule | None:
         if self._cache:
             cached = await self._cache.get_cached_rules(event_code)
             if cached is not None:
-                return self._deserialize_rules(cached)
+                rules = self._deserialize_rules(cached)
+                return rules[0] if rules else None
 
-        rules = await self._rule_repo.get_active_by_event_code(event_code, conn)
+        rule = await self._rule_repo.get_active_by_event_code(event_code, conn)
 
-        if self._cache and rules:
-            await self._cache.set_cached_rules(event_code, self._serialize_rules(rules))
-        return rules
+        if self._cache and rule:
+            await self._cache.set_cached_rules(
+                event_code, self._serialize_rules([rule])
+            )
+        return rule
 
     @staticmethod
     def _deserialize_rules(raw: list[dict]) -> list[Rule]:
@@ -179,6 +176,7 @@ class ApplyRuleUseCase:
                 rule.conditions, account=account, metadata=metadata, conn=conn
             )
         except ValueError as e:
+            print(f"unsuccess Error on: {e}")
             return {"unsuccess": f"Error on: {e}"}
 
         actions = rule.actions

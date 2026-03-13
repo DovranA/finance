@@ -24,7 +24,7 @@ class RuleRepository(ABC):
     @abstractmethod
     async def get_active_by_event_code(
         self, event_code: str, conn: Connection
-    ) -> list[Rule]: ...
+    ) -> Rule | None: ...
 
     @abstractmethod
     async def list_all(

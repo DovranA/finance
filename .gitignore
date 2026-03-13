@@ -161,3 +161,4 @@ Thumbs.db
 
 /docs
 tests/test.py
+batch_user_seeder.sh
