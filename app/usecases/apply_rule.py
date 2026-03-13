@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from asyncpg import Connection, Pool
 
@@ -93,6 +94,105 @@ class ApplyRuleUseCase:
         except ValueError as e:
             raise DomainError(e)
         return result
+
+    async def execute_batch(
+        self,
+        *,
+        event_code: str,
+        items: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        results: list[dict[str, Any]] = []
+        touched_accounts: set[uuid.UUID] = set()
+
+        async with transaction(self._pool) as conn:
+            rule = await self._fetch_rules(event_code, conn)
+            if not rule:
+                logger.info("no_active_rules", event_code=event_code)
+                return {
+                    "event_code": event_code,
+                    "total": len(items),
+                    "applied": 0,
+                    "failed": len(items),
+                    "results": [
+                        {
+                            "user_id": str(i.get("user_id", "")),
+                            "applied": False,
+                            "applied_rule": None,
+                            "error": "no_active_rules",
+                        }
+                        for i in items
+                    ],
+                }
+
+            treasury = await self._account_repo.get_by_account_type(
+                AccountTypes.TREASURY, conn
+            )
+
+            for item in items:
+                user_id = uuid.UUID(str(item["user_id"]))
+                inbox_id = item.get("inbox_id")
+                metadata = dict(item.get("metadata") or {})
+                role = item.get("role")
+                event_id = item.get("event_id")
+
+                if role:
+                    metadata["role"] = role
+                if event_id:
+                    metadata["event_id"] = str(event_id)
+                metadata["event_code"] = event_code
+
+                try:
+                    account = await self._account_repo.get_by_owner_id_for_update(
+                        user_id, conn
+                    )
+                    if account is None:
+                        raise AccountNotFound(f"Account {user_id} not found")
+                    account.ensure_active()
+
+                    applied_rule = await self._apply_single_rule(
+                        rule=rule,
+                        account=account,
+                        treasury=treasury,
+                        event_code=event_code,
+                        user_id=user_id,
+                        metadata=metadata,
+                        conn=conn,
+                    )
+                    touched_accounts.add(account.id)
+                    results.append(
+                        {
+                            "inbox_id": inbox_id,
+                            "user_id": str(user_id),
+                            "applied": applied_rule is not None,
+                            "applied_rule": applied_rule,
+                            "error": None,
+                        }
+                    )
+                except Exception as exc:
+                    results.append(
+                        {
+                            "inbox_id": inbox_id,
+                            "user_id": str(user_id),
+                            "applied": False,
+                            "applied_rule": None,
+                            "error": str(exc),
+                        }
+                    )
+
+            if self._cache:
+                for account_id in touched_accounts:
+                    await self._cache.invalidate_balance(account_id)
+                if treasury:
+                    await self._cache.invalidate_balance(treasury.id)
+
+        applied_count = sum(1 for r in results if r["applied"])
+        return {
+            "event_code": event_code,
+            "total": len(results),
+            "applied": applied_count,
+            "failed": len(results) - applied_count,
+            "results": results,
+        }
 
     # ── Rule fetching (cache → DB) ───────────────────────
 

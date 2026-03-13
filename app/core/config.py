@@ -69,6 +69,7 @@ class AppSettings(BaseSettings):
     log_level: str = "INFO"
     host: str = "0.0.0.0"
     port: int = 8000
+    enable_inbox_consumer: bool = False
 
 
 class BatchSettings(BaseSettings):

@@ -41,6 +41,7 @@ from app.usecases.rule_crud import (
     DeleteRuleUseCase,
 )
 from app.usecases.apply_rule import ApplyRuleUseCase
+from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
 
 
 logger = get_logger(__name__)
@@ -226,6 +227,13 @@ class UseCaseProvider(Provider):
             condition_engine=condition_engine,
             cache=cache,
         )
+
+    @provide
+    def apply_rule_batch_uc(
+        self,
+        apply_rule_uc: ApplyRuleUseCase,
+    ) -> BatchApplyRuleUseCase:
+        return BatchApplyRuleUseCase(apply_rule_uc=apply_rule_uc)
 
 
 def create_container() -> AsyncContainer:

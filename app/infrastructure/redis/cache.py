@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 ECONOMIC_CONFIG_TTL = 300  # 5 minutes
 IDEMPOTENCY_TTL = 3600  # 1 hour
 BALANCE_CACHE_TTL = 60  # 1 minute
+RULE_ACTION_STAGING_TTL = 7200  # 2 hours
 
 
 class CacheService:
@@ -107,6 +108,32 @@ class CacheService:
     async def invalidate_balance(self, account_id: uuid.UUID) -> None:
         key = f"bal:{account_id}"
         await self._redis.delete(key)
+
+    # ── Rule Action Staging (RabbitMQ -> batch worker) ──
+
+    RULE_ACTION_EVENTS_KEY = "rule_actions:events"
+
+    async def stage_rule_action(self, event_code: str, payload: dict[str, Any]) -> None:
+        key = f"rule_actions:{event_code}"
+        await self._redis.rpush(key, orjson.dumps(payload))
+        await self._redis.expire(key, RULE_ACTION_STAGING_TTL)
+        await self._redis.sadd(self.RULE_ACTION_EVENTS_KEY, event_code)
+
+    async def pull_rule_actions(
+        self, event_code: str, size: int
+    ) -> list[dict[str, Any]]:
+        key = f"rule_actions:{event_code}"
+        raw = await self._redis.lpop(key, size)
+        if raw is None:
+            await self._redis.srem(self.RULE_ACTION_EVENTS_KEY, event_code)
+            return []
+        if isinstance(raw, bytes):
+            return [orjson.loads(raw)]
+        return [orjson.loads(item) for item in raw]
+
+    async def list_staged_event_codes(self) -> list[str]:
+        values = await self._redis.smembers(self.RULE_ACTION_EVENTS_KEY)
+        return [v.decode() if isinstance(v, bytes) else str(v) for v in values]
 
     # ── Daily Limit Cache ────────────────────────────────
 

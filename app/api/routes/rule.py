@@ -9,6 +9,8 @@ from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
 from app.api.schemas.rule import (
     ApplyRuleRequest,
+    BatchApplyRuleRequest,
+    BatchApplyRuleResponse,
     CreateRuleRequest,
     UpdateRuleRequest,
     RuleResponse,
@@ -22,6 +24,7 @@ from app.usecases.rule_crud import (
     DeleteRuleUseCase,
 )
 from app.usecases.apply_rule import ApplyRuleUseCase
+from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
 
 router = APIRouter(prefix="/rules", tags=["Rules"], route_class=DishkaRoute)
 
@@ -153,3 +156,13 @@ async def apply_rule(uc: FromDishka[ApplyRuleUseCase], body: ApplyRuleRequest) -
         metadata=body.metadata,
     )
     return {"applied_rule": result, "applied": result is not None}
+
+
+@router.post("/apply/batch", response_model=BatchApplyRuleResponse)
+async def apply_rule_batch(
+    uc: FromDishka[BatchApplyRuleUseCase],
+    body: BatchApplyRuleRequest,
+) -> BatchApplyRuleResponse:
+    payload = [item.model_dump(exclude_none=True) for item in body.items]
+    result = await uc.execute(event_code=body.event_code, items=payload)
+    return BatchApplyRuleResponse(**result)

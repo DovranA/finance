@@ -71,3 +71,30 @@ class ApplyRuleRequest(BaseModel):
     event_id: uuid.UUID | None = uuid.uuid4()
     role: str = "simple"
     metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+
+class BatchApplyRuleItem(BaseModel):
+    user_id: uuid.UUID
+    event_id: uuid.UUID | None = None
+    role: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class BatchApplyRuleRequest(BaseModel):
+    event_code: str = Field(min_length=1)
+    items: list[BatchApplyRuleItem] = Field(min_length=1)
+
+
+class BatchApplyRuleResult(BaseModel):
+    user_id: str
+    applied: bool
+    applied_rule: dict[str, Any] | None = None
+    error: str | None = None
+
+
+class BatchApplyRuleResponse(BaseModel):
+    event_code: str
+    total: int
+    applied: int
+    failed: int
+    results: list[BatchApplyRuleResult]

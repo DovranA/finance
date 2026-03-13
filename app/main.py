@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from dishka.integrations.fastapi import setup_dishka
@@ -12,6 +14,7 @@ from app.api.schemas.common import HealthResponse
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
 from app.di import create_container
+from app.infrastructure.rabbitmq.inbox_consumer import run_consumer
 from app.domain.exceptions import (
     AccountInactive,
     AccountNotFound,
@@ -82,6 +85,23 @@ def create_app() -> FastAPI:
     @app.get("/health", response_model=HealthResponse, tags=["Health"])
     async def health_check():
         return HealthResponse(service=settings.app.name)
+
+    @app.on_event("startup")
+    async def start_inbox_consumer() -> None:
+        app.state.inbox_consumer_task = None
+        if settings.app.enable_inbox_consumer:
+            app.state.inbox_consumer_task = asyncio.create_task(run_consumer())
+            logger.info("inbox_consumer_started_in_main")
+
+    @app.on_event("shutdown")
+    async def stop_inbox_consumer() -> None:
+        task = getattr(app.state, "inbox_consumer_task", None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     return app
 
