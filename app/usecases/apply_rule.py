@@ -104,6 +104,12 @@ class ApplyRuleUseCase:
         results: list[dict[str, Any]] = []
         touched_accounts: set[uuid.UUID] = set()
 
+        pending_txs: list[Transaction] = []
+        pending_entries: list[LedgerEntry] = []
+        pending_redis_updates: list[tuple] = (
+            []
+        )  # (rule, account_id, idem_key, event_code)
+
         async with transaction(self._pool) as conn:
             rule = await self._fetch_rules(event_code, conn)
             if not rule:
@@ -128,6 +134,8 @@ class ApplyRuleUseCase:
                 AccountTypes.TREASURY, conn
             )
 
+            accounts_cache: dict[uuid.UUID, Account] = {}
+
             for item in items:
                 user_id = uuid.UUID(str(item["user_id"]))
                 inbox_id = item.get("inbox_id")
@@ -142,14 +150,19 @@ class ApplyRuleUseCase:
                 metadata["event_code"] = event_code
 
                 try:
-                    account = await self._account_repo.get_by_owner_id_for_update(
-                        user_id, conn
-                    )
-                    if account is None:
-                        raise AccountNotFound(f"Account {user_id} not found")
+                    if user_id in accounts_cache:
+                        account = accounts_cache[user_id]
+                    else:
+                        account = await self._account_repo.get_by_owner_id_for_update(
+                            user_id, conn
+                        )
+                        if account is None:
+                            raise AccountNotFound(f"Account {user_id} not found")
+                        accounts_cache[user_id] = account
+
                     account.ensure_active()
 
-                    applied_rule = await self._apply_single_rule(
+                    calc_res = await self._calculate_rule_application(
                         rule=rule,
                         account=account,
                         treasury=treasury,
@@ -158,16 +171,54 @@ class ApplyRuleUseCase:
                         metadata=metadata,
                         conn=conn,
                     )
-                    touched_accounts.add(account.id)
-                    results.append(
-                        {
-                            "inbox_id": inbox_id,
-                            "user_id": str(user_id),
-                            "applied": applied_rule is not None,
-                            "applied_rule": applied_rule,
-                            "error": None,
-                        }
-                    )
+
+                    if calc_res and calc_res.get("status") == "applied":
+                        tx = calc_res["tx"]
+                        entries = calc_res["entries"]
+                        amount = calc_res["amount"]
+                        direction = calc_res["direction"]
+
+                        if direction == LedgerDirection.DIRECTION_CREDIT:
+                            account.credit(amount)
+                        else:
+                            account.debit(amount)
+
+                        pending_txs.append(tx)
+                        pending_entries.extend(entries)
+                        touched_accounts.add(account.id)
+
+                        pending_redis_updates.append(
+                            (rule, account.id, calc_res["idem_key"], event_code)
+                        )
+
+                        results.append(
+                            {
+                                "inbox_id": inbox_id,
+                                "user_id": str(user_id),
+                                "applied": True,
+                                "applied_rule": {
+                                    "rule_id": str(rule.id),
+                                    "event_code": event_code,
+                                    "direction": int(direction),
+                                    "amount": amount,
+                                    "currency": calc_res.get("currency", "TMT"),
+                                    "status": "applied",
+                                },
+                                "error": None,
+                            }
+                        )
+                    else:
+                        err = calc_res.get("unsuccess") if calc_res else None
+                        results.append(
+                            {
+                                "inbox_id": inbox_id,
+                                "user_id": str(user_id),
+                                "applied": False,
+                                "applied_rule": None,
+                                "error": err,
+                            }
+                        )
+
                 except Exception as exc:
                     results.append(
                         {
@@ -179,10 +230,24 @@ class ApplyRuleUseCase:
                         }
                     )
 
+            if pending_txs:
+                await self._transaction_repo.save_many(pending_txs, conn)
+
+            if pending_entries:
+                await self._ledger_repo.insert_many(pending_entries, conn)
+
+            for acc in accounts_cache.values():
+                if acc.id in touched_accounts:
+                    await self._account_repo.update_balance(acc.id, acc.balance, conn)
+
             if self._cache:
+                for r, acc_id, k, ec in pending_redis_updates:
+                    await self._mark_one_time(r, acc_id, k)
+                    await self._incr_daily_count(r, acc_id, ec)
+
                 for account_id in touched_accounts:
                     await self._cache.invalidate_balance(account_id)
-                if treasury:
+                if treasury and touched_accounts:
                     await self._cache.invalidate_balance(treasury.id)
 
         applied_count = sum(1 for r in results if r["applied"])
@@ -251,6 +316,84 @@ class ApplyRuleUseCase:
             }
             for r in rules
         ]
+
+    # ── Calculation without persistence (Batch) ───────────
+
+    async def _calculate_rule_application(
+        self,
+        *,
+        rule: Rule,
+        account: Account,
+        treasury: Account | None,
+        event_code: str,
+        user_id: uuid.UUID,
+        metadata: dict,
+        conn: Connection,
+    ) -> dict | None:
+        rule_idem_key = self._resolve_idem_key(
+            rule, event_code, user_id, account.id, uuid.uuid4().hex, metadata
+        )
+        metadata["idempotency_key"] = rule_idem_key
+
+        try:
+            await self._condition_engine.validate(
+                rule.conditions, account=account, metadata=metadata, conn=conn
+            )
+        except ValueError as e:
+            return {"unsuccess": f"Error on: {e}"}
+
+        actions = rule.actions
+        direction = LedgerDirection(actions.get("direction", 1))
+        amount = actions.get("reward", actions.get("amount", 0))
+        if amount <= 0:
+            return None
+
+        if await self._is_already_applied(rule.id, rule_idem_key, conn):
+            return None
+
+        tx = Transaction.create(
+            idempotency_key=rule_idem_key,
+            reference_type=event_code,
+            reference_id=str(account.id),
+            metadata={"rule_id": str(rule.id), "event_code": event_code, **metadata},
+            status="completed",
+        )
+
+        entries = []
+        opposite = (
+            LedgerDirection.DIRECTION_DEBIT
+            if direction == LedgerDirection.DIRECTION_CREDIT
+            else LedgerDirection.DIRECTION_CREDIT
+        )
+
+        entries.append(
+            LedgerEntry.create(
+                account_id=account.id,
+                transaction_id=tx.id,
+                amount=amount,
+                direction=direction,
+            )
+        )
+
+        if treasury:
+            entries.append(
+                LedgerEntry.create(
+                    account_id=treasury.id,
+                    transaction_id=tx.id,
+                    amount=amount,
+                    direction=opposite,
+                )
+            )
+
+        return {
+            "tx": tx,
+            "entries": entries,
+            "amount": amount,
+            "direction": direction,
+            "idem_key": rule_idem_key,
+            "status": "applied",
+            "currency": actions.get("currency", "TMT"),
+        }
 
     # ── Single rule application ──────────────────────────
 

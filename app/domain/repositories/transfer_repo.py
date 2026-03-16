@@ -36,6 +36,18 @@ class TransactionRepository(ABC):
         ...
 
     @abstractmethod
+    async def save_many(self, entries: list[Transaction], conn: Connection) -> None:
+        """Batch insert transactions."""
+        ...
+
+    @abstractmethod
+    async def filter_existing(
+        self, idempotency_keys: list[str], conn: Connection
+    ) -> list[str]:
+        """Return the subset of keys that already exist and are completed."""
+        ...
+
+    @abstractmethod
     async def mark_completed(self, idempotency_key: str, conn: Connection) -> None:
         """Mark transaction as completed."""
         ...

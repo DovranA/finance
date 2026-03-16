@@ -1,10 +1,8 @@
 """Rule REST API endpoints — CRUD + event-driven rule application."""
 
-from __future__ import annotations
-
 import uuid
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Body, Query
 from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
 from app.api.schemas.rule import (
@@ -31,8 +29,8 @@ router = APIRouter(prefix="/rules", tags=["Rules"], route_class=DishkaRoute)
 
 @router.post("", response_model=RuleResponse, status_code=201)
 async def create_rule(
-    data: CreateRuleRequest,
     uc: FromDishka[CreateRuleUseCase],
+    data: CreateRuleRequest = Body(...),
 ) -> RuleResponse:
     rule = await uc.execute(
         event_code=data.event_code,
@@ -107,8 +105,8 @@ async def list_rules(
 @router.patch("/{rule_id}", response_model=RuleResponse)
 async def update_rule(
     rule_id: uuid.UUID,
-    data: UpdateRuleRequest,
     uc: FromDishka[UpdateRuleUseCase],
+    data: UpdateRuleRequest = Body(...),
 ) -> RuleResponse:
     rule = await uc.execute(
         rule_id=rule_id,
@@ -144,7 +142,10 @@ async def delete_rule(
 
 
 @router.post("/apply")
-async def apply_rule(uc: FromDishka[ApplyRuleUseCase], body: ApplyRuleRequest) -> dict:
+async def apply_rule(
+    uc: FromDishka[ApplyRuleUseCase],
+    body: ApplyRuleRequest = Body(...),
+) -> dict:
     """Apply a single active rule matching the given event_code to the account."""
     if body.role:
         body.metadata["role"] = body.role
@@ -161,7 +162,7 @@ async def apply_rule(uc: FromDishka[ApplyRuleUseCase], body: ApplyRuleRequest) -
 @router.post("/apply/batch", response_model=BatchApplyRuleResponse)
 async def apply_rule_batch(
     uc: FromDishka[BatchApplyRuleUseCase],
-    body: BatchApplyRuleRequest,
+    body: BatchApplyRuleRequest = Body(...),
 ) -> BatchApplyRuleResponse:
     payload = [item.model_dump(exclude_none=True) for item in body.items]
     result = await uc.execute(event_code=body.event_code, items=payload)

@@ -59,6 +59,60 @@ class PgTransactionRepository(TransactionRepository):
             entry.expires_at,
         )
 
+    async def save_many(self, entries: list[Transaction], conn: Connection) -> None:
+        if not entries:
+            return
+
+        data = [
+            (
+                e.id,
+                e.idempotency_key,
+                e.status,
+                e.reference_type,
+                e.reference_id,
+                orjson.dumps(e.metadata).decode("utf-8"),
+                e.created_at,
+                e.expires_at,
+            )
+            for e in entries
+        ]
+
+        # await conn.executemany(
+        #     "INSERT INTO transactions "
+        #     "(id, idempotency_key, status, reference_type, reference_id, "
+        #     "metadata, created_at, expires_at) "
+        #     "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        #     data,
+        # )
+
+        await conn.copy_records_to_table(
+            "transactions",
+            records=data,
+            columns=[
+                "id",
+                "idempotency_key",
+                "status",
+                "reference_type",
+                "reference_id",
+                "metadata",
+                "created_at",
+                "expires_at",
+            ],
+        )
+
+    async def filter_existing(
+        self, idempotency_keys: list[str], conn: Connection
+    ) -> list[str]:
+        if not idempotency_keys:
+            return []
+
+        rows = await conn.fetch(
+            "SELECT idempotency_key FROM transactions "
+            "WHERE idempotency_key = ANY($1::text[]) AND status = 'completed'",
+            idempotency_keys,
+        )
+        return [r["idempotency_key"] for r in rows]
+
     async def mark_completed(self, idempotency_key: str, conn: Connection) -> None:
         await conn.execute(
             "UPDATE transactions SET status = 'completed' "

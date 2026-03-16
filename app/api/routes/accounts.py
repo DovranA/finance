@@ -1,10 +1,8 @@
 """Account REST API endpoints."""
 
-from __future__ import annotations
-
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
 from app.api.schemas.account import BalanceResponse, NewBalanceRequest
@@ -25,10 +23,10 @@ async def get_balance(
 
 
 @router.post("/{user_id}/new_balance", response_model=BalanceResponse)
-async def get_balance(
+async def set_new_balance(
     user_id: uuid.UUID,
-    data: NewBalanceRequest,
     uc: FromDishka[SetBalanceUseCase],
+    data: NewBalanceRequest = Body(...),
 ) -> BalanceResponse:
     """Get the balance for a user account."""
     result = await uc.execute(user_id=user_id, new_balance=data.new_balance)

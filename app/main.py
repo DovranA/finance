@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -14,6 +15,7 @@ from app.api.schemas.common import HealthResponse
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
 from app.di import create_container
+from app.grpc_server import create_grpc_server
 from app.infrastructure.rabbitmq.inbox_consumer import run_consumer
 from app.domain.exceptions import (
     AccountInactive,
@@ -38,12 +40,13 @@ def create_app() -> FastAPI:
         title="Finance Microservice",
         description="High-load finance service for TikTok-like platform",
         version="1.0.0",
+        lifespan=lifespan,
     )
 
     # ── Dishka DI container ──────────────────────────────
     container = create_container()
     setup_dishka(container, app)
-
+    app.state.container = container
     # ── Register routers ─────────────────────────────────
     app.include_router(accounts.router)
     app.include_router(rule.router)
@@ -104,6 +107,46 @@ def create_app() -> FastAPI:
                 pass
 
     return app
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+
+    # ── STARTUP ─────────────────────────────
+
+    # gRPC server
+    app.state.grpc_server = await create_grpc_server(
+        container=app.state.container,
+        host=settings.app.host,
+        port=50051,
+    )
+    await app.state.grpc_server.start()
+    logger.info("grpc_server_started")
+
+    # RabbitMQ consumer
+    # app.state.inbox_consumer_task = None
+    # if settings.app.enable_inbox_consumer:
+    #     app.state.inbox_consumer_task = asyncio.create_task(run_consumer())
+    #     logger.info("inbox_consumer_started")
+
+    yield  # ← приложение работает
+
+    # ── SHUTDOWN ────────────────────────────
+
+    # stop consumer
+    # task = getattr(app.state, "inbox_consumer_task", None)
+    # if task:
+    #     task.cancel()
+    #     try:
+    #         await task
+    #     except asyncio.CancelledError:
+    #         pass
+
+    # stop gRPC
+    server = getattr(app.state, "grpc_server", None)
+    if server:
+        await server.stop(grace=5)
 
 
 app = create_app()

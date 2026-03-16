@@ -163,3 +163,5 @@ Thumbs.db
 tests/test.py
 batch_user_seeder.sh
 /tests
+command.md
+.python-version
