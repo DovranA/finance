@@ -1,0 +1,3 @@
+[submodule "event-schemas"]
+	path = event-schemas
+	url = https://gitlab.tmbiz.info/tmbiz.info/event-schemas.git
