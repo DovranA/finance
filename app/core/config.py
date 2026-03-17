@@ -34,8 +34,8 @@ class RabbitMQSettings(BaseSettings):
     user: str = "guest"
     password: str = "guest"
     vhost: str = "/"
-    exchange: str = "finance_events"
-    queue_rewards: str = "reward_events"
+    exchange: str = "finance"
+    queue_rewards: str = "finance.processed:user.event"
     prefetch_count: int = 100
 
     @property
@@ -69,7 +69,7 @@ class AppSettings(BaseSettings):
     log_level: str = "INFO"
     host: str = "0.0.0.0"
     port: int = 8000
-    enable_inbox_consumer: bool = False
+    enable_inbox_consumer: bool = True
 
 
 class BatchSettings(BaseSettings):

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from asyncpg import Connection, Pool
+from asyncpg.exceptions import UniqueViolationError
 
 from app.core.logging import get_logger
 from app.domain.entities.account import Account
@@ -69,11 +70,7 @@ class ApplyRuleUseCase:
                     logger.info("no_active_rules", event_code=event_code)
                     return None
 
-                account = await self._account_repo.get_by_owner_id_for_update(
-                    user_id, conn
-                )
-                if account is None:
-                    raise AccountNotFound(f"Account {user_id} not   found")
+                account = await self._get_or_create_account_for_update(user_id, conn)
                 account.ensure_active()
 
                 treasury = await self._account_repo.get_by_account_type(
@@ -170,13 +167,9 @@ class ApplyRuleUseCase:
                         if user_id in accounts_cache:
                             account = accounts_cache[user_id]
                         else:
-                            account = (
-                                await self._account_repo.get_by_owner_id_for_update(
-                                    user_id, conn
-                                )
+                            account = await self._get_or_create_account_for_update(
+                                user_id, conn
                             )
-                            if account is None:
-                                raise AccountNotFound(f"Account {user_id} not found")
                             accounts_cache[user_id] = account
 
                         account.ensure_active()
@@ -552,6 +545,26 @@ class ApplyRuleUseCase:
             )
             return True
         return False
+
+    async def _get_or_create_account_for_update(
+        self, user_id: uuid.UUID, conn: Connection
+    ) -> Account:
+        account = await self._account_repo.get_by_owner_id_for_update(user_id, conn)
+        if account is not None:
+            return account
+
+        try:
+            await self._account_repo.create(
+                Account.create(user_id=user_id, owner_type="user"), conn
+            )
+        except UniqueViolationError:
+            # Another transaction created the account between read and insert.
+            pass
+
+        account = await self._account_repo.get_by_owner_id_for_update(user_id, conn)
+        if account is None:
+            raise AccountNotFound(f"Account {user_id} not found")
+        return account
 
     # ── Transaction creation ─────────────────────────────
 

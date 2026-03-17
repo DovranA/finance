@@ -89,23 +89,6 @@ def create_app() -> FastAPI:
     async def health_check():
         return HealthResponse(service=settings.app.name)
 
-    @app.on_event("startup")
-    async def start_inbox_consumer() -> None:
-        app.state.inbox_consumer_task = None
-        if settings.app.enable_inbox_consumer:
-            app.state.inbox_consumer_task = asyncio.create_task(run_consumer())
-            logger.info("inbox_consumer_started_in_main")
-
-    @app.on_event("shutdown")
-    async def stop_inbox_consumer() -> None:
-        task = getattr(app.state, "inbox_consumer_task", None)
-        if task:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-
     return app
 
 
@@ -125,23 +108,25 @@ async def lifespan(app: FastAPI):
     logger.info("grpc_server_started")
 
     # RabbitMQ consumer
-    # app.state.inbox_consumer_task = None
-    # if settings.app.enable_inbox_consumer:
-    #     app.state.inbox_consumer_task = asyncio.create_task(run_consumer())
-    #     logger.info("inbox_consumer_started")
+    app.state.inbox_consumer_task = None
+    if settings.app.enable_inbox_consumer:
+        app.state.inbox_consumer_task = asyncio.create_task(
+            run_consumer(app.state.container)
+        )
+        logger.info("inbox_consumer_started")
 
     yield  # ← приложение работает
 
     # ── SHUTDOWN ────────────────────────────
 
     # stop consumer
-    # task = getattr(app.state, "inbox_consumer_task", None)
-    # if task:
-    #     task.cancel()
-    #     try:
-    #         await task
-    #     except asyncio.CancelledError:
-    #         pass
+    task = getattr(app.state, "inbox_consumer_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     # stop gRPC
     server = getattr(app.state, "grpc_server", None)

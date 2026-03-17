@@ -42,6 +42,7 @@ from app.usecases.rule_crud import (
 )
 from app.usecases.apply_rule import ApplyRuleUseCase
 from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
+from app.usecases.inbox_service import InboxService
 
 
 logger = get_logger(__name__)
@@ -234,6 +235,10 @@ class UseCaseProvider(Provider):
         apply_rule_uc: ApplyRuleUseCase,
     ) -> BatchApplyRuleUseCase:
         return BatchApplyRuleUseCase(apply_rule_uc=apply_rule_uc)
+
+    @provide
+    def inbox_service(self, pool: Pool) -> InboxService:
+        return InboxService(pool=pool)
 
 
 def create_container() -> AsyncContainer:

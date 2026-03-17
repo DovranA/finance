@@ -1,6 +1,7 @@
 """RabbitMQ connection management using aio-pika."""
 
 from __future__ import annotations
+from typing import Any
 
 import aio_pika
 from aio_pika import RobustConnection, RobustChannel
@@ -53,9 +54,14 @@ async def declare_queue(
     queue_name: str,
     exchange: AbstractRobustExchange,
     routing_key: str = "#",
+    arguments: dict[str, Any] | None = None,
 ) -> aio_pika.abc.AbstractRobustQueue:
     """Declare a durable queue and bind it to the exchange."""
-    queue = await channel.declare_queue(queue_name, durable=True)
+    queue = await channel.declare_queue(
+        queue_name,
+        durable=True,
+        arguments=arguments,
+    )
     await queue.bind(exchange, routing_key=routing_key)
     logger.info(
         "rabbitmq_queue_declared",

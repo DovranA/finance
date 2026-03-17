@@ -3,66 +3,54 @@
 from __future__ import annotations
 
 import asyncio
+from dishka import AsyncContainer
+from aio_pika import IncomingMessage
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.infrastructure.db.connection import close_pool, create_pool
-from app.infrastructure.rabbitmq.connection import (
-    create_channel,
-    create_connection,
-    declare_exchange,
-    declare_queue,
-)
-from app.infrastructure.rabbitmq.consumer import RewardEvent, consume_messages
+from app.infrastructure.rabbitmq.consumer import consume_messages
+from app.infrastructure.rabbitmq.event_types import InboxEvent
+from app.usecases.inbox_service import InboxService
+from app.di import create_container
+from app.infrastructure.rabbitmq.runner import ConsumerSpec, run_consumers
 
 logger = get_logger(__name__)
 
 
-async def _store_event(pool, event: RewardEvent) -> None:
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO rule_action_inbox "
-            "(event_id, event_code, user_id, role, metadata, status) "
-            "VALUES ($1, $2, $3, $4, $5::jsonb, 'pending') "
-            "ON CONFLICT (event_id) DO NOTHING",
-            event.event_id,
-            event.action_code,
-            event.publisher_id,
-            None,
-            {
-                "actor_id": str(event.actor_id),
-                "publisher_id": str(event.publisher_id),
-                "content_id": str(event.content_id),
-                "timestamp": event.timestamp.isoformat(),
-            },
-        )
+async def _inbox_message_handler(
+    message: IncomingMessage,
+    container: AsyncContainer,
+) -> None:
+    async def _handler(events: list[InboxEvent]) -> None:
+        async with container() as scope:
+            service = await scope.get(InboxService)
+            await service.handle(events)
+
+    await consume_messages(message, _handler)
 
 
-async def run_consumer() -> None:
+def get_consumer_specs() -> list[ConsumerSpec]:
     settings = get_settings()
     rabbit = settings.rabbitmq
+    queue = rabbit.queue_rewards
 
-    pool = await create_pool(settings.postgres)
-    conn = await create_connection(rabbit)
-    channel = await create_channel(conn, prefetch_count=rabbit.prefetch_count)
-    exchange = await declare_exchange(channel, rabbit.exchange)
-    queue = await declare_queue(
-        channel, rabbit.queue_rewards, exchange, routing_key="#"
-    )
+    return [
+        ConsumerSpec(
+            name="inbox-rule-action-consumer",
+            exchange=rabbit.exchange,
+            queue=queue,
+            routing_key="#",
+            dead_letter_exchange="dlx",
+            dead_letter_queue=f"{queue}.dlq",
+            dead_letter_routing_key=f"{queue}.dlq",
+            handler=_inbox_message_handler,
+        )
+    ]
 
-    async def _handler(event: RewardEvent) -> None:
-        await _store_event(pool, event)
 
-    await queue.consume(lambda msg: consume_messages(msg, _handler))
-    logger.info("rule_inbox_consumer_started", queue=rabbit.queue_rewards)
-
-    try:
-        await asyncio.Future()
-    finally:
-        await channel.close()
-        await conn.close()
-        await close_pool(pool)
+async def run_consumer(container: AsyncContainer) -> None:
+    await run_consumers(container, get_consumer_specs())
 
 
 if __name__ == "__main__":
-    asyncio.run(run_consumer())
+    asyncio.run(run_consumer(create_container()))

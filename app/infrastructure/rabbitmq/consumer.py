@@ -3,43 +3,26 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Callable, Awaitable
+from typing import Awaitable, Callable
 
-import orjson
 from aio_pika import IncomingMessage
 
 from app.core.logging import get_logger
+from app.infrastructure.rabbitmq.dto_parser import parse_user_engaged_list
+from app.infrastructure.rabbitmq.event_mapper import (
+    map_user_engaged_list_to_inbox_events,
+)
+from app.infrastructure.rabbitmq.event_types import InboxEvent
 
 logger = get_logger(__name__)
 
 
-@dataclass(frozen=True)
-class RewardEvent:
-    """Deserialized reward event from RabbitMQ."""
-
-    event_id: uuid.UUID
-    actor_id: uuid.UUID
-    content_id: uuid.UUID
-    publisher_id: uuid.UUID
-    action_code: str
-    timestamp: datetime
-
-    @classmethod
-    def from_bytes(cls, body: bytes) -> RewardEvent:
-        data = orjson.loads(body)
-        return cls(
-            event_id=uuid.UUID(data["event_id"]),
-            actor_id=uuid.UUID(data["actor_id"]),
-            content_id=uuid.UUID(data["content_id"]),
-            publisher_id=uuid.UUID(data["publisher_id"]),
-            action_code=data["action_code"],
-            timestamp=datetime.fromisoformat(data["timestamp"]),
-        )
+def parse_inbox_events(body: bytes) -> list[InboxEvent]:
+    dto = parse_user_engaged_list(body)
+    return map_user_engaged_list_to_inbox_events(dto)
 
 
-EventHandler = Callable[[RewardEvent], Awaitable[None]]
+EventHandler = Callable[[list[InboxEvent]], Awaitable[None]]
 
 
 async def consume_messages(
@@ -47,19 +30,17 @@ async def consume_messages(
     handler: EventHandler,
 ) -> None:
     """Process a single incoming message with ack/nack."""
-    async with message.process(requeue=True):
+    async with message.process(requeue=False):
         try:
-            event = RewardEvent.from_bytes(message.body)
+            events = parse_inbox_events(message.body)
             logger.info(
                 "event_received",
-                event_id=str(event.event_id),
-                action_code=event.action_code,
-                actor_id=str(event.actor_id),
+                parsed_events=len(events),
             )
-            await handler(event)
+            await handler(events)
             logger.info(
                 "event_processed",
-                event_id=str(event.event_id),
+                parsed_events=len(events),
             )
         except Exception:
             logger.exception(
