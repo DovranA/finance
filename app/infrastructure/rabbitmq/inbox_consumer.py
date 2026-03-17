@@ -33,17 +33,16 @@ def get_consumer_specs() -> list[ConsumerSpec]:
     settings = get_settings()
     rabbit = settings.rabbitmq
     queue = rabbit.queue_rewards
-
     return [
         ConsumerSpec(
             name="inbox-rule-action-consumer",
             exchange=rabbit.exchange,
             queue=queue,
             routing_key="#",
+            handler=_inbox_message_handler,
             dead_letter_exchange="dlx",
             dead_letter_queue=f"{queue}.dlq",
             dead_letter_routing_key=f"{queue}.dlq",
-            handler=_inbox_message_handler,
         )
     ]
 

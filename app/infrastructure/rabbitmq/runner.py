@@ -30,10 +30,10 @@ class ConsumerSpec:
     exchange: str
     queue: str
     routing_key: str
-    dead_letter_exchange: str
-    dead_letter_queue: str
-    dead_letter_routing_key: str
     handler: MessageHandler
+    dead_letter_exchange: str = ""
+    dead_letter_queue: str = ""
+    dead_letter_routing_key: str = ""
 
 
 async def run_consumers(container: AsyncContainer, specs: list[ConsumerSpec]) -> None:
@@ -46,20 +46,23 @@ async def run_consumers(container: AsyncContainer, specs: list[ConsumerSpec]) ->
     try:
         for spec in specs:
             exchange = await declare_exchange(channel, spec.exchange)
-            await declare_exchange(channel, spec.dead_letter_exchange)
+
+            queue_args: dict[str, str] | None = None
+            if spec.dead_letter_exchange:
+                await declare_exchange(channel, spec.dead_letter_exchange)
+                await channel.declare_queue(spec.dead_letter_queue, durable=True)
+                queue_args = {
+                    "x-dead-letter-exchange": spec.dead_letter_exchange,
+                    "x-dead-letter-routing-key": spec.dead_letter_routing_key,
+                }
 
             await declare_queue(
                 channel,
                 spec.queue,
                 exchange,
                 routing_key=spec.routing_key,
-                arguments={
-                    "x-dead-letter-exchange": spec.dead_letter_exchange,
-                    "x-dead-letter-routing-key": spec.dead_letter_routing_key,
-                },
+                arguments=queue_args,
             )
-
-            await channel.declare_queue(spec.dead_letter_queue, durable=True)
 
             queue = await channel.get_queue(spec.queue)
             await queue.consume(lambda msg, h=spec.handler: h(msg, container))

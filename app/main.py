@@ -31,6 +31,21 @@ from app.usecases.rule_crud import RuleNotFound
 logger = get_logger(__name__)
 
 
+def _log_task_result(task_name: str, task: asyncio.Task) -> None:
+    """Log unhandled background task failures explicitly."""
+    if task.cancelled():
+        logger.info("background_task_cancelled", task=task_name)
+        return
+
+    exc = task.exception()
+    if exc is not None:
+        logger.exception(
+            "background_task_failed",
+            task=task_name,
+            error=str(exc),
+        )
+
+
 def create_app() -> FastAPI:
     """Application factory."""
     settings = get_settings()
@@ -109,9 +124,17 @@ async def lifespan(app: FastAPI):
 
     # RabbitMQ consumer
     app.state.inbox_consumer_task = None
+    logger.info(
+        "inbox_consumer_toggle",
+        enabled=settings.app.enable_inbox_consumer,
+    )
     if settings.app.enable_inbox_consumer:
         app.state.inbox_consumer_task = asyncio.create_task(
-            run_consumer(app.state.container)
+            run_consumer(app.state.container),
+            name="inbox_consumer",
+        )
+        app.state.inbox_consumer_task.add_done_callback(
+            lambda t: _log_task_result("inbox_consumer", t)
         )
         logger.info("inbox_consumer_started")
 
