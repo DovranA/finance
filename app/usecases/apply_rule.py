@@ -121,6 +121,7 @@ class ApplyRuleUseCase:
                     "failed": len(items),
                     "results": [
                         {
+                            "inbox_id": i.get("inbox_id"),
                             "user_id": str(i.get("user_id", "")),
                             "applied": False,
                             "applied_rule": None,
@@ -137,11 +138,11 @@ class ApplyRuleUseCase:
             accounts_cache: dict[uuid.UUID, Account] = {}
 
             for item in items:
-                user_id = uuid.UUID(str(item["user_id"]))
                 inbox_id = item.get("inbox_id")
                 metadata = dict(item.get("metadata") or {})
                 role = item.get("role")
                 event_id = item.get("event_id")
+                source_user_id = item.get("user_id")
 
                 if role:
                     metadata["role"] = role
@@ -150,80 +151,98 @@ class ApplyRuleUseCase:
                 metadata["event_code"] = event_code
 
                 try:
-                    if user_id in accounts_cache:
-                        account = accounts_cache[user_id]
-                    else:
-                        account = await self._account_repo.get_by_owner_id_for_update(
-                            user_id, conn
-                        )
-                        if account is None:
-                            raise AccountNotFound(f"Account {user_id} not found")
-                        accounts_cache[user_id] = account
+                    targets = self._resolve_target_users(rule, item)
+                    any_applied = False
+                    first_applied_rule: dict[str, Any] | None = None
+                    errors: list[str] = []
 
-                    account.ensure_active()
+                    for target_key, user_id in targets:
+                        per_target_metadata = dict(metadata)
+                        per_target_metadata["target_key"] = target_key
 
-                    calc_res = await self._calculate_rule_application(
-                        rule=rule,
-                        account=account,
-                        treasury=treasury,
-                        event_code=event_code,
-                        user_id=user_id,
-                        metadata=metadata,
-                        conn=conn,
-                    )
+                        amount_override = None
+                        target_amounts = (rule.actions or {}).get(
+                            "target_amounts"
+                        ) or {}
+                        if isinstance(target_amounts, dict):
+                            amount_override = target_amounts.get(target_key)
 
-                    if calc_res and calc_res.get("status") == "applied":
-                        tx = calc_res["tx"]
-                        entries = calc_res["entries"]
-                        amount = calc_res["amount"]
-                        direction = calc_res["direction"]
-
-                        if direction == LedgerDirection.DIRECTION_CREDIT:
-                            account.credit(amount)
+                        if user_id in accounts_cache:
+                            account = accounts_cache[user_id]
                         else:
-                            account.debit(amount)
+                            account = (
+                                await self._account_repo.get_by_owner_id_for_update(
+                                    user_id, conn
+                                )
+                            )
+                            if account is None:
+                                raise AccountNotFound(f"Account {user_id} not found")
+                            accounts_cache[user_id] = account
 
-                        pending_txs.append(tx)
-                        pending_entries.extend(entries)
-                        touched_accounts.add(account.id)
+                        account.ensure_active()
 
-                        pending_redis_updates.append(
-                            (rule, account.id, calc_res["idem_key"], event_code)
+                        calc_res = await self._calculate_rule_application(
+                            rule=rule,
+                            account=account,
+                            treasury=treasury,
+                            event_code=event_code,
+                            user_id=user_id,
+                            metadata=per_target_metadata,
+                            amount_override=amount_override,
+                            conn=conn,
                         )
 
-                        results.append(
-                            {
-                                "inbox_id": inbox_id,
-                                "user_id": str(user_id),
-                                "applied": True,
-                                "applied_rule": {
+                        if calc_res and calc_res.get("status") == "applied":
+                            tx = calc_res["tx"]
+                            entries = calc_res["entries"]
+                            amount = calc_res["amount"]
+                            direction = calc_res["direction"]
+
+                            if direction == LedgerDirection.DIRECTION_CREDIT:
+                                account.credit(amount)
+                            else:
+                                account.debit(amount)
+
+                            pending_txs.append(tx)
+                            pending_entries.extend(entries)
+                            touched_accounts.add(account.id)
+
+                            pending_redis_updates.append(
+                                (rule, account.id, calc_res["idem_key"], event_code)
+                            )
+
+                            any_applied = True
+                            if first_applied_rule is None:
+                                first_applied_rule = {
                                     "rule_id": str(rule.id),
                                     "event_code": event_code,
                                     "direction": int(direction),
                                     "amount": amount,
                                     "currency": calc_res.get("currency", "TMT"),
                                     "status": "applied",
-                                },
-                                "error": None,
-                            }
-                        )
-                    else:
-                        err = calc_res.get("unsuccess") if calc_res else None
-                        results.append(
-                            {
-                                "inbox_id": inbox_id,
-                                "user_id": str(user_id),
-                                "applied": False,
-                                "applied_rule": None,
-                                "error": err,
-                            }
-                        )
+                                    "target_user_id": str(user_id),
+                                    "target_key": target_key,
+                                }
+                        else:
+                            err = calc_res.get("unsuccess") if calc_res else None
+                            if err:
+                                errors.append(err)
+
+                    results.append(
+                        {
+                            "inbox_id": inbox_id,
+                            "user_id": str(source_user_id),
+                            "applied": any_applied,
+                            "applied_rule": first_applied_rule,
+                            "error": "; ".join(errors) if errors else None,
+                        }
+                    )
 
                 except Exception as exc:
                     results.append(
                         {
                             "inbox_id": inbox_id,
-                            "user_id": str(user_id),
+                            "user_id": str(source_user_id),
                             "applied": False,
                             "applied_rule": None,
                             "error": str(exc),
@@ -328,6 +347,7 @@ class ApplyRuleUseCase:
         event_code: str,
         user_id: uuid.UUID,
         metadata: dict,
+        amount_override: int | None = None,
         conn: Connection,
     ) -> dict | None:
         rule_idem_key = self._resolve_idem_key(
@@ -344,7 +364,11 @@ class ApplyRuleUseCase:
 
         actions = rule.actions
         direction = LedgerDirection(actions.get("direction", 1))
-        amount = actions.get("reward", actions.get("amount", 0))
+        amount = (
+            amount_override
+            if amount_override is not None
+            else actions.get("reward", actions.get("amount", 0))
+        )
         if amount <= 0:
             return None
 
@@ -419,7 +443,6 @@ class ApplyRuleUseCase:
                 rule.conditions, account=account, metadata=metadata, conn=conn
             )
         except ValueError as e:
-            print(f"unsuccess Error on: {e}")
             return {"unsuccess": f"Error on: {e}"}
 
         actions = rule.actions
@@ -479,6 +502,43 @@ class ApplyRuleUseCase:
             }
             return resolve_idempotency_pattern(pattern, context)
         return generate_idempotency_key(fallback_key, str(rule.id))
+
+    @staticmethod
+    def _resolve_target_users(
+        rule: Rule, item: dict[str, Any]
+    ) -> list[tuple[str, uuid.UUID]]:
+        actions = rule.actions or {}
+        metadata = item.get("metadata") or {}
+        target_keys = actions.get("target_users") or ["user_id"]
+
+        resolved: list[tuple[str, uuid.UUID]] = []
+
+        for key in target_keys:
+            raw_val = None
+            if key == "user_id":
+                raw_val = item.get("user_id")
+            elif key in item:
+                raw_val = item.get(key)
+            elif key in metadata:
+                raw_val = metadata.get(key)
+            elif isinstance(key, str) and key.startswith("metadata."):
+                raw_val = metadata.get(key.split(".", 1)[1])
+
+            if raw_val is None:
+                continue
+
+            try:
+                target_id = uuid.UUID(str(raw_val))
+            except (ValueError, TypeError):
+                continue
+
+            pair = (str(key), target_id)
+            if pair not in resolved:
+                resolved.append(pair)
+
+        if resolved:
+            return resolved
+        return [("user_id", uuid.UUID(str(item["user_id"])))]
 
     async def _is_already_applied(
         self, rule_id: uuid.UUID, idem_key: str, conn: Connection

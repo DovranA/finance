@@ -25,7 +25,10 @@ class RuleAction(BaseModel):
 
     direction: int = 1  # 1 = credit, -1 = debit
     amount: int = 0
+    reward: int | None = None
     currency: str = "TMT"
+    target_users: list[str] | None = None
+    target_amounts: dict[str, int] | None = None
 
 
 class CreateRuleRequest(BaseModel):
