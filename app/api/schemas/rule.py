@@ -16,6 +16,7 @@ class RuleCondition(BaseModel):
     role_required: Optional[list[str]] = None
     one_time_only: Optional[bool] = None
     daily_limit: Optional[int] = None
+    cooldown_days: Optional[int] = None
     required_metadata: Optional[list[str]] = None
     idempotency_pattern: Optional[str] = None
 

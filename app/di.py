@@ -19,6 +19,7 @@ from app.domain.policies.registry import ValidatorRegistry, registry as global_r
 from app.domain.policies.validators.min_balance import MinBalanceValidator
 from app.domain.policies.validators.role_required import RoleRequiredValidator
 from app.domain.policies.validators.daily_limit import DailyLimitValidator
+from app.domain.policies.validators.cooldown_days import CooldownDaysValidator
 from app.domain.policies.validators.one_time_only import OneTimeValidator
 from app.domain.policies.validators.required_metadata import RequiredMetadataValidator
 from app.infrastructure.db.connection import create_pool, close_pool
@@ -119,6 +120,7 @@ class PolicyProvider(Provider):
         global_registry.register(MinBalanceValidator())
         global_registry.register(RoleRequiredValidator())
         global_registry.register(DailyLimitValidator(cache=cache))
+        global_registry.register(CooldownDaysValidator())
         global_registry.register(OneTimeValidator(cache=cache))
         global_registry.register(RequiredMetadataValidator())
         return global_registry
