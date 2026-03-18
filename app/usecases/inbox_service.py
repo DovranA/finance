@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from asyncpg import Pool
 
 from app.infrastructure.rabbitmq.event_types import InboxEvent
@@ -23,7 +25,7 @@ class InboxService:
                 event.event_code,
                 event.user_id,
                 event.role,
-                event.metadata,
+                json.dumps(event.metadata),
             )
             for event in events
         ]

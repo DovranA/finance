@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime
 from typing import Any
@@ -29,6 +30,19 @@ from app.infrastructure.db.transaction import transaction
 from app.infrastructure.redis.cache import CacheService
 
 logger = get_logger(__name__)
+
+
+def _ensure_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            return {}
+    return {}
 
 
 class ApplyRuleUseCase:
@@ -136,7 +150,18 @@ class ApplyRuleUseCase:
 
             for item in items:
                 inbox_id = item.get("inbox_id")
-                metadata = dict(item.get("metadata") or {})
+                raw_metadata = item.get("metadata")
+                if isinstance(raw_metadata, str):
+                    try:
+                        parsed_metadata = json.loads(raw_metadata)
+                    except json.JSONDecodeError:
+                        parsed_metadata = {}
+                elif isinstance(raw_metadata, dict):
+                    parsed_metadata = raw_metadata
+                else:
+                    parsed_metadata = {}
+
+                metadata = dict(parsed_metadata)
                 role = item.get("role")
                 event_id = item.get("event_id")
                 source_user_id = item.get("user_id")
@@ -295,8 +320,8 @@ class ApplyRuleUseCase:
                 id=uuid.UUID(r["id"]),
                 event_code=r["event_code"],
                 description=r.get("description"),
-                conditions=r.get("conditions", {}),
-                actions=r.get("actions", {}),
+                conditions=_ensure_dict(r.get("conditions", {})),
+                actions=_ensure_dict(r.get("actions", {})),
                 priority=r.get("priority", 0),
                 is_active=r.get("is_active", True),
                 expired_at=(
@@ -501,7 +526,7 @@ class ApplyRuleUseCase:
         rule: Rule, item: dict[str, Any]
     ) -> list[tuple[str, uuid.UUID]]:
         actions = rule.actions or {}
-        metadata = item.get("metadata") or {}
+        metadata = _ensure_dict(item.get("metadata"))
         target_keys = actions.get("target_users") or ["user_id"]
 
         resolved: list[tuple[str, uuid.UUID]] = []

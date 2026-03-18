@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import os
 import uuid
+from pathlib import Path
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -130,5 +133,39 @@ async def run_worker() -> None:
     await worker.run()
 
 
+def _load_env_file(path: str) -> None:
+    env_path = Path(path)
+    if not env_path.is_absolute():
+        env_path = Path.cwd() / env_path
+
+    if not env_path.exists():
+        raise FileNotFoundError(f"Environment file not found: {env_path}")
+
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key:
+            os.environ[key] = value
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run rule batch worker in standalone mode.",
+    )
+    parser.add_argument(
+        "--env-file",
+        default=".env.dev",
+        help="Path to env file to load before starting worker",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = _parse_args()
+    _load_env_file(args.env_file)
     asyncio.run(run_worker())
