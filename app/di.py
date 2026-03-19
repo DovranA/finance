@@ -14,6 +14,7 @@ from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
 from app.domain.repositories.rule_repo import RuleRepository
+from app.domain.repositories.statistics_repo import StatisticsRepository
 from app.domain.policies.engine import ConditionEngine
 from app.domain.policies.registry import ValidatorRegistry, registry as global_registry
 from app.domain.policies.validators.min_balance import MinBalanceValidator
@@ -29,6 +30,9 @@ from app.infrastructure.db.repositories.transaction_repo_impl import (
 )
 from app.infrastructure.db.repositories.ledger_repo_impl import PgLedgerRepository
 from app.infrastructure.db.repositories.rule_repo_impl import PgRuleRepository
+from app.infrastructure.db.repositories.statistics_repo_impl import (
+    PgStatisticsRepository,
+)
 from app.infrastructure.redis.cache import CacheService
 from app.infrastructure.redis.client import create_redis_pool, close_redis
 from app.usecases.get_balance import GetBalanceUseCase
@@ -44,6 +48,7 @@ from app.usecases.rule_crud import (
 from app.usecases.apply_rule import ApplyRuleUseCase
 from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
 from app.usecases.inbox_service import InboxService
+from app.usecases.statistics import ClientStatisticsUseCase, AdminStatisticsUseCase
 
 
 logger = get_logger(__name__)
@@ -107,6 +112,10 @@ class RepositoryProvider(Provider):
     rule_repo = provide(
         PgRuleRepository,
         provides=RuleRepository,
+    )
+    statistics_repo = provide(
+        PgStatisticsRepository,
+        provides=StatisticsRepository,
     )
 
 
@@ -241,6 +250,30 @@ class UseCaseProvider(Provider):
     @provide
     def inbox_service(self, pool: Pool) -> InboxService:
         return InboxService(pool=pool)
+
+    @provide
+    def client_statistics_uc(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+        stats_repo: StatisticsRepository,
+    ) -> ClientStatisticsUseCase:
+        return ClientStatisticsUseCase(
+            pool=pool,
+            account_repo=account_repo,
+            stats_repo=stats_repo,
+        )
+
+    @provide
+    def admin_statistics_uc(
+        self,
+        pool: Pool,
+        stats_repo: StatisticsRepository,
+    ) -> AdminStatisticsUseCase:
+        return AdminStatisticsUseCase(
+            pool=pool,
+            stats_repo=stats_repo,
+        )
 
 
 def create_container() -> AsyncContainer:

@@ -37,8 +37,7 @@ class CreateRuleUseCase:
         priority: int = 0,
         expired_at: datetime | None = None,
     ) -> Rule:
-        print(f"condition:{conditions}")
-        print(f"action:{actions}")
+
         rule = Rule.create(
             event_code=event_code,
             conditions=conditions,
@@ -47,7 +46,6 @@ class CreateRuleUseCase:
             priority=priority,
             expired_at=expired_at,
         )
-        print(rule)
         try:
             async with transaction(self._pool) as conn:
                 await self._rule_repo.create(rule, conn)

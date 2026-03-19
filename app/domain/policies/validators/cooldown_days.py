@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 from asyncpg import Connection
@@ -39,7 +40,8 @@ class CooldownDaysValidator(ConditionValidator):
             raise ValueError("event_code is required for cooldown_days")
 
         exists = await conn.fetchval(
-            "SELECT 1 FROM transactions "
+            "SELECT created_at FROM transactions "
+            "ORDER BY created_at DESC "
             "WHERE reference_id = $1 "
             "AND reference_type = $2 "
             "AND status = 'completed' "
@@ -51,6 +53,7 @@ class CooldownDaysValidator(ConditionValidator):
         )
 
         if exists:
+            expires_at = exists + timedelta(days=days)
             raise CooldownDaysExceeded(
-                f"cooldown_days:{days} not reached for event '{event_code}'"
+                f"cooldown_days:{days} not reached for event '{event_code}' {expires_at.isoformat()}"
             )
