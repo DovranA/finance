@@ -42,6 +42,7 @@ class Rule:
     id: uuid.UUID
     event_code: str
     description: str | None
+    description_i18n: dict[str, str] | None
     conditions: dict[str, Any]
     actions: dict[str, Any]
     priority: int
@@ -70,6 +71,7 @@ class Rule:
         conditions: dict[str, Any] | None = None,
         actions: dict[str, Any] | None = None,
         description: str | None = None,
+        description_i18n: dict[str, str] | None = None,
         priority: int = 0,
         expired_at: datetime | None = None,
     ) -> Rule:
@@ -78,6 +80,7 @@ class Rule:
             id=uuid.uuid4(),
             event_code=event_code,
             description=description,
+            description_i18n=description_i18n,
             conditions=conditions or {},
             actions=actions or {},
             priority=priority,

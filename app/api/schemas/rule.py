@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RuleCondition(BaseModel):
@@ -32,9 +32,18 @@ class RuleAction(BaseModel):
     target_amounts: dict[str, int] | None = None
 
 
+class RuleDescriptionI18n(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    en: str | None = None
+    ru: str | None = None
+    tk: str | None = None
+
+
 class CreateRuleRequest(BaseModel):
     event_code: str = Field(..., min_length=1, max_length=128)
     description: str | None = None
+    description_i18n: RuleDescriptionI18n | None = None
     conditions: RuleCondition = Field(default_factory=dict)
     actions: RuleAction = Field(default_factory=dict)
     priority: int = 0
@@ -44,6 +53,7 @@ class CreateRuleRequest(BaseModel):
 class UpdateRuleRequest(BaseModel):
     event_code: str | None = Field(None, min_length=1, max_length=128)
     description: str | None = None
+    description_i18n: RuleDescriptionI18n | None = None
     conditions: dict[str, Any] | None = None
     actions: dict[str, Any] | None = None
     priority: int | None = None
@@ -55,6 +65,8 @@ class RuleResponse(BaseModel):
     id: uuid.UUID
     event_code: str
     description: str | None
+    description_i18n: RuleDescriptionI18n | None = None
+    localized_description: str | None = None
     conditions: dict[str, Any]
     actions: dict[str, Any]
     priority: int
@@ -67,6 +79,9 @@ class RuleResponse(BaseModel):
 class RuleListResponse(BaseModel):
     rules: list[RuleResponse]
     total: int
+
+
+RuleLang = Literal["en", "ru", "tk"]
 
 
 class ApplyRuleRequest(BaseModel):

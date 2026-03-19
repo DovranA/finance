@@ -7,6 +7,7 @@ import uuid
 from typing import Literal
 
 from asyncpg import Pool
+import orjson
 
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.statistics_repo import StatisticsRepository
@@ -140,11 +141,29 @@ class ClientStatisticsUseCase:
             categories = await self._stats_repo.get_client_by_category(
                 account.id, period_days, direction_value, conn
             )
+        normalized_categories = []
+        for c in categories:
+            description_i18n = c.get("description_i18n")
+            if isinstance(description_i18n, str):
+                description_i18n = orjson.loads(description_i18n)
+            if not isinstance(description_i18n, dict):
+                description_i18n = {}
+
+            normalized_categories.append(
+                {
+                    "event_code": c.get("event_code") or c.get("category"),
+                    "description_i18n": description_i18n,
+                    "credits": int(c.get("credits") or 0),
+                    "debits": int(c.get("debits") or 0),
+                    "net": int(c.get("net") or 0),
+                    "transaction_count": int(c.get("transaction_count") or 0),
+                }
+            )
 
         return {
             "user_id": user_id,
             "period_days": period_days,
-            "categories": categories,
+            "categories": normalized_categories,
         }
 
     async def get_streaks(

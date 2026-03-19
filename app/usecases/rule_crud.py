@@ -34,6 +34,7 @@ class CreateRuleUseCase:
         conditions: dict | None = None,
         actions: dict | None = None,
         description: str | None = None,
+        description_i18n: dict[str, str] | None = None,
         priority: int = 0,
         expired_at: datetime | None = None,
     ) -> Rule:
@@ -43,6 +44,7 @@ class CreateRuleUseCase:
             conditions=conditions,
             actions=actions,
             description=description,
+            description_i18n=description_i18n,
             priority=priority,
             expired_at=expired_at,
         )
@@ -103,6 +105,7 @@ class UpdateRuleUseCase:
         conditions: dict | None = None,
         actions: dict | None = None,
         description: str | None = None,
+        description_i18n: dict[str, str] | None = None,
         priority: int | None = None,
         is_active: bool | None = None,
         expired_at: datetime | None = None,
@@ -120,6 +123,8 @@ class UpdateRuleUseCase:
                 rule.actions = actions
             if description is not None:
                 rule.description = description
+            if description_i18n is not None:
+                rule.description_i18n = description_i18n
             if priority is not None:
                 rule.priority = priority
             if is_active is not None:

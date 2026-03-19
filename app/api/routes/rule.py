@@ -10,6 +10,7 @@ from app.api.schemas.rule import (
     BatchApplyRuleRequest,
     BatchApplyRuleResponse,
     CreateRuleRequest,
+    RuleLang,
     UpdateRuleRequest,
     RuleResponse,
     RuleListResponse,
@@ -27,16 +28,37 @@ from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
 router = APIRouter(prefix="/rules", tags=["Rules"], route_class=DishkaRoute)
 
 
+def _resolve_localized_description(
+    description_i18n: dict | None,
+    description: str | None,
+    lang: RuleLang | None,
+) -> str | None:
+    if not isinstance(description_i18n, dict):
+        description_i18n = {}
+
+    if lang and description_i18n.get(lang):
+        return description_i18n.get(lang)
+    if description_i18n.get("en"):
+        return description_i18n.get("en")
+    return description
+
+
 @router.post("", response_model=RuleResponse, status_code=201)
 async def create_rule(
     uc: FromDishka[CreateRuleUseCase],
     data: CreateRuleRequest = Body(...),
+    lang: RuleLang | None = Query(None),
 ) -> RuleResponse:
     rule = await uc.execute(
         event_code=data.event_code,
         conditions=data.conditions.model_dump(exclude_none=True),
         actions=data.actions.model_dump(exclude_none=True),
         description=data.description,
+        description_i18n=(
+            data.description_i18n.model_dump(exclude_none=True)
+            if data.description_i18n
+            else None
+        ),
         priority=data.priority,
         expired_at=data.expired_at,
     )
@@ -44,6 +66,12 @@ async def create_rule(
         id=rule.id,
         event_code=rule.event_code,
         description=rule.description,
+        description_i18n=rule.description_i18n,
+        localized_description=_resolve_localized_description(
+            rule.description_i18n,
+            rule.description,
+            lang,
+        ),
         conditions=rule.conditions,
         actions=rule.actions,
         priority=rule.priority,
@@ -58,12 +86,19 @@ async def create_rule(
 async def get_rule(
     rule_id: uuid.UUID,
     uc: FromDishka[GetRuleUseCase],
+    lang: RuleLang | None = Query(None),
 ) -> RuleResponse:
     rule = await uc.execute(rule_id=rule_id)
     return RuleResponse(
         id=rule.id,
         event_code=rule.event_code,
         description=rule.description,
+        description_i18n=rule.description_i18n,
+        localized_description=_resolve_localized_description(
+            rule.description_i18n,
+            rule.description,
+            lang,
+        ),
         conditions=rule.conditions,
         actions=rule.actions,
         priority=rule.priority,
@@ -78,6 +113,7 @@ async def get_rule(
 async def list_rules(
     uc: FromDishka[ListRulesUseCase],
     event_code: str | None = Query(None),
+    lang: RuleLang | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> RuleListResponse:
@@ -88,6 +124,12 @@ async def list_rules(
                 id=r.id,
                 event_code=r.event_code,
                 description=r.description,
+                description_i18n=r.description_i18n,
+                localized_description=_resolve_localized_description(
+                    r.description_i18n,
+                    r.description,
+                    lang,
+                ),
                 conditions=r.conditions,
                 actions=r.actions,
                 priority=r.priority,
@@ -107,6 +149,7 @@ async def update_rule(
     rule_id: uuid.UUID,
     uc: FromDishka[UpdateRuleUseCase],
     data: UpdateRuleRequest = Body(...),
+    lang: RuleLang | None = Query(None),
 ) -> RuleResponse:
     rule = await uc.execute(
         rule_id=rule_id,
@@ -114,6 +157,11 @@ async def update_rule(
         conditions=data.conditions,
         actions=data.actions,
         description=data.description,
+        description_i18n=(
+            data.description_i18n.model_dump(exclude_none=True)
+            if data.description_i18n
+            else None
+        ),
         priority=data.priority,
         is_active=data.is_active,
         expired_at=data.expired_at,
@@ -122,6 +170,12 @@ async def update_rule(
         id=rule.id,
         event_code=rule.event_code,
         description=rule.description,
+        description_i18n=rule.description_i18n,
+        localized_description=_resolve_localized_description(
+            rule.description_i18n,
+            rule.description,
+            lang,
+        ),
         conditions=rule.conditions,
         actions=rule.actions,
         priority=rule.priority,

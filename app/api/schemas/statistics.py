@@ -34,7 +34,8 @@ class ClientStatsTimelineResponse(BaseModel):
 
 
 class ClientCategoryPoint(BaseModel):
-    category: str
+    event_code: str | None = None
+    description_i18n: dict[str, str] | None = None
     credits: int
     debits: int
     net: int

@@ -78,16 +78,20 @@ class PgStatisticsRepository(StatisticsRepository):
             """
             SELECT
                 COALESCE(t.reference_type, 'unknown') AS category,
+                COALESCE(t.reference_type, 'unknown') AS event_code,
+                COALESCE(r.description_i18n, '{}'::jsonb) AS description_i18n,
+                r.description AS description,
                 COALESCE(SUM(CASE WHEN le.direction = 1 THEN le.amount ELSE 0 END), 0) AS credits,
                 COALESCE(SUM(CASE WHEN le.direction = -1 THEN le.amount ELSE 0 END), 0) AS debits,
                 COALESCE(SUM(CASE WHEN le.direction = 1 THEN le.amount ELSE -le.amount END), 0) AS net,
                 COALESCE(COUNT(DISTINCT le.transaction_id), 0) AS transaction_count
             FROM ledger_entries le
             JOIN transactions t ON t.id = le.transaction_id
+            LEFT JOIN rules r ON r.event_code = t.reference_type
             WHERE le.account_id = $1
               AND le.created_at >= NOW() - ($2 * INTERVAL '1 day')
               AND ($3::SMALLINT IS NULL OR le.direction = $3)
-            GROUP BY 1
+            GROUP BY 1, 2, 3, 4
             ORDER BY transaction_count DESC, category ASC
             """,
             account_id,
