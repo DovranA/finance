@@ -21,6 +21,9 @@ COPY --from=builder /install /usr/local
 COPY app/ ./app/
 COPY sql/ ./sql/
 
+# Ensure runtime user can write where needed (logs, temp artifacts).
+RUN chown -R appuser:appuser /app
+
 # Switch to non-root user
 USER appuser
 
@@ -30,4 +33,4 @@ ENV APP_PORT=8000
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--loop", "uvloop"]
+CMD ["gunicorn", "-c", "python:app.infrastructure.gunicorn.config", "app.main:app"]

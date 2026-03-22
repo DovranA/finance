@@ -9,3 +9,8 @@ build/
 venv/
 .mypy_cache/
 .pytest_cache/
+tests/
+event-schemas/
+docs/
+.idea/
+.vscode/

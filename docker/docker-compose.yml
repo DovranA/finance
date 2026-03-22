@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # ── PostgreSQL ───────────────────────────────────────────
   postgres:
@@ -16,7 +14,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U finance_user -d finance_db" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finance_user} -d ${POSTGRES_DB:-finance_db}" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -59,12 +57,52 @@ services:
 
   # ── Finance API ──────────────────────────────────────────
   finance-api:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: finance-api
     networks:
       - finance-network
     ports:
       - "${APP_PORT:-8000}:8000"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-finance_db}
+      POSTGRES_USER: ${POSTGRES_USER:-finance_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance_secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      APP_ENV: ${APP_ENV:-production}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      APP_ENABLE_INBOX_CONSUMER: "false"
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-60}
+      GUNICORN_LOG_LEVEL: ${GUNICORN_LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Inbox Consumer Worker ──────────────────────────────
+  finance-inbox-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: finance-inbox-worker
+    command: ["python", "-m", "app.infrastructure.rabbitmq.inbox_consumer"]
+    networks:
+      - finance-network
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -87,9 +125,44 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: unless-stopped
+
+  # ── Rule Batch Worker ──────────────────────────────────
+  finance-batch-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: finance-batch-worker
+    command: ["python", "-m", "app.infrastructure.rabbitmq.batch_worker", "--env-file", "/dev/null"]
+    networks:
+      - finance-network
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-finance_db}
+      POSTGRES_USER: ${POSTGRES_USER:-finance_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance_secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      APP_ENV: ${APP_ENV:-production}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      BATCH_SIZE: ${BATCH_SIZE:-500}
+      BATCH_INTERVAL_SECONDS: ${BATCH_INTERVAL_SECONDS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
   redisinsight-finance:
     image: redis/redisinsight:latest
-    container_name: ${DOCKER_COMPOSE_PROJECT_NAME}-redisinsight-1
+    container_name: ${DOCKER_COMPOSE_PROJECT_NAME:-finance}-redisinsight-1
     ports:
       - 5540:5540
     networks:
