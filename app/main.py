@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from asyncpg import Pool
 from dishka.integrations.fastapi import setup_dishka
+from prometheus_client import make_asgi_app
 
 from app.api.routes import accounts
 from app.api.routes import rule
@@ -15,6 +18,7 @@ from app.api.routes import statistics
 from app.api.schemas.common import HealthResponse
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
+from app.core.metrics import register_metrics, AppMetrics
 from app.di import create_container
 from app.grpc_server import create_grpc_server
 from app.infrastructure.rabbitmq.inbox_consumer import run_consumer
@@ -30,6 +34,31 @@ from app.domain.exceptions import (
 from app.usecases.rule_crud import RuleNotFound
 
 logger = get_logger(__name__)
+
+
+def _request_path(request: Request) -> str:
+    route = request.scope.get("route")
+    if route is not None and getattr(route, "path", None):
+        return route.path
+    return request.url.path
+
+
+async def _collect_db_metrics(
+    container,
+    metrics: AppMetrics,
+    interval_seconds: float,
+) -> None:
+    while True:
+        try:
+            async with container() as request_scope:
+                pool = await request_scope.get(Pool)
+                await metrics.record_db_stats(pool)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("db_metrics_collection_failed", error=str(exc))
+
+        await asyncio.sleep(interval_seconds)
 
 
 def _log_task_result(task_name: str, task: asyncio.Task) -> None:
@@ -58,6 +87,30 @@ def create_app() -> FastAPI:
         version="1.0.0",
         lifespan=lifespan,
     )
+
+    if settings.app.enable_metrics:
+        app.mount("/metrics", make_asgi_app())
+
+        @app.middleware("http")
+        async def prometheus_http_metrics(request: Request, call_next):
+            metrics = app.state.metrics
+            started_at = time.perf_counter()
+
+            try:
+                response = await call_next(request)
+            except Exception:
+                duration = time.perf_counter() - started_at
+                path = _request_path(request)
+                metrics.inc_request(path, request.method, "500")
+                metrics.observe_latency(path, request.method, "500", duration)
+                raise
+
+            status_code = str(response.status_code)
+            duration = time.perf_counter() - started_at
+            path = _request_path(request)
+            metrics.inc_request(path, request.method, status_code)
+            metrics.observe_latency(path, request.method, status_code, duration)
+            return response
 
     # ── Dishka DI container ──────────────────────────────
     container = create_container()
@@ -113,6 +166,9 @@ def create_app() -> FastAPI:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    app.state.db_metrics_task = None
+    if settings.app.enable_metrics:
+        app.state.metrics = await register_metrics()
 
     # ── STARTUP ─────────────────────────────
 
@@ -141,6 +197,19 @@ async def lifespan(app: FastAPI):
         )
         logger.info("inbox_consumer_started")
 
+    if settings.app.enable_metrics:
+        app.state.db_metrics_task = asyncio.create_task(
+            _collect_db_metrics(
+                container=app.state.container,
+                metrics=app.state.metrics,
+                interval_seconds=settings.app.metrics_db_interval_seconds,
+            ),
+            name="db_metrics_collector",
+        )
+        app.state.db_metrics_task.add_done_callback(
+            lambda t: _log_task_result("db_metrics_collector", t)
+        )
+
     yield  # ← приложение работает
 
     # ── SHUTDOWN ────────────────────────────
@@ -151,6 +220,14 @@ async def lifespan(app: FastAPI):
         task.cancel()
         try:
             await task
+        except asyncio.CancelledError:
+            pass
+
+    metrics_task = getattr(app.state, "db_metrics_task", None)
+    if metrics_task:
+        metrics_task.cancel()
+        try:
+            await metrics_task
         except asyncio.CancelledError:
             pass
 

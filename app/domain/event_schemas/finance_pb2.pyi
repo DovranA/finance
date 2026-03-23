@@ -1,4 +1,5 @@
 import shared_pb2 as _shared_pb2
+from google.protobuf import struct_pb2 as _struct_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
@@ -28,18 +29,18 @@ class GetBalanceResponse(_message.Message):
     def __init__(self, user_id: _Optional[str] = ..., account_id: _Optional[str] = ..., balance: _Optional[int] = ..., currency: _Optional[str] = ..., cached: bool = ...) -> None: ...
 
 class Event(_message.Message):
-    __slots__ = ("event_code", "post_id", "author_id", "view_percentage", "role")
+    __slots__ = ("event_code", "post_id", "author_id", "view_percentage", "metadata")
     EVENT_CODE_FIELD_NUMBER: _ClassVar[int]
     POST_ID_FIELD_NUMBER: _ClassVar[int]
     AUTHOR_ID_FIELD_NUMBER: _ClassVar[int]
     VIEW_PERCENTAGE_FIELD_NUMBER: _ClassVar[int]
-    ROLE_FIELD_NUMBER: _ClassVar[int]
+    METADATA_FIELD_NUMBER: _ClassVar[int]
     event_code: _containers.RepeatedScalarFieldContainer[str]
     post_id: str
     author_id: str
     view_percentage: int
-    role: str
-    def __init__(self, event_code: _Optional[_Iterable[str]] = ..., post_id: _Optional[str] = ..., author_id: _Optional[str] = ..., view_percentage: _Optional[int] = ..., role: _Optional[str] = ...) -> None: ...
+    metadata: _struct_pb2.Struct
+    def __init__(self, event_code: _Optional[_Iterable[str]] = ..., post_id: _Optional[str] = ..., author_id: _Optional[str] = ..., view_percentage: _Optional[int] = ..., metadata: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ...) -> None: ...
 
 class UserEngagedList(_message.Message):
     __slots__ = ("header", "user_id", "role", "post_list")

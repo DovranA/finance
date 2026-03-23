@@ -41,24 +41,6 @@ class PgLedgerRepository(LedgerRepository):
             )
             for e in entries
         ]
-        # await conn.executemany(
-        #     """
-        #     INSERT INTO ledger_entries
-        #     (id, account_id, transaction_id, amount, direction, created_at)
-        #     VALUES ($1,$2,$3,$4,$5,$6)
-        #     """,
-        #     [
-        #         (
-        #             e.id,
-        #             e.account_id,
-        #             e.transaction_id,
-        #             e.amount,
-        #             e.direction,
-        #             e.created_at,
-        #         )
-        #         for e in entries
-        #     ],
-        # )
         await conn.copy_records_to_table(
             "ledger_entries",
             records=data,

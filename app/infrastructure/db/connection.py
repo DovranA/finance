@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import asyncpg
 from asyncpg import Pool
 
@@ -13,13 +15,14 @@ logger = get_logger(__name__)
 
 async def create_pool(settings: PostgresSettings) -> Pool:
     """Create and return an asyncpg connection pool."""
+    app_name = os.getenv("APP_NAME", "finance-service")
     pool = await asyncpg.create_pool(
         dsn=settings.dsn,
         min_size=settings.pool_min,
         max_size=settings.pool_max,
         command_timeout=30,
         server_settings={
-            "application_name": "finance-service",
+            "application_name": app_name,
         },
     )
     logger.info(
@@ -27,6 +30,7 @@ async def create_pool(settings: PostgresSettings) -> Pool:
         host=settings.host,
         port=settings.port,
         db=settings.db,
+        application_name=app_name,
         min_size=settings.pool_min,
         max_size=settings.pool_max,
     )

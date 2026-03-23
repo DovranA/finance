@@ -9,13 +9,9 @@ from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC,
-    6,
-    31,
-    1,
-    '',
-    'finance.proto'
+    _runtime_version.Domain.PUBLIC, 6, 31, 1, "", "finance.proto"
 )
 # @@protoc_insertion_point(imports)
 
@@ -23,24 +19,29 @@ _sym_db = _symbol_database.Default()
 
 
 from . import shared_pb2 as shared__pb2
+from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rfinance.proto\x12\x07\x66inance\x1a\x0cshared.proto\"$\n\x11GetBalanceRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"l\n\x12GetBalanceResponse\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\naccount_id\x18\x02 \x01(\t\x12\x0f\n\x07\x62\x61lance\x18\x03 \x01(\x05\x12\x10\n\x08\x63urrency\x18\x04 \x01(\t\x12\x0e\n\x06\x63\x61\x63hed\x18\x05 \x01(\x08\"f\n\x05\x45vent\x12\x12\n\nevent_code\x18\x01 \x03(\t\x12\x0f\n\x07post_id\x18\x02 \x01(\t\x12\x11\n\tauthor_id\x18\x03 \x01(\t\x12\x17\n\x0fview_percentage\x18\x04 \x01(\r\x12\x0c\n\x04role\x18\x05 \x01(\t\"x\n\x0fUserEngagedList\x12#\n\x06header\x18\x01 \x01(\x0b\x32\x13.shared.EventHeader\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x0c\n\x04role\x18\x03 \x01(\t\x12!\n\tpost_list\x18\x04 \x03(\x0b\x32\x0e.finance.Event2W\n\x0e\x42\x61lanceService\x12\x45\n\nGetBalance\x12\x1a.finance.GetBalanceRequest\x1a\x1b.finance.GetBalanceResponseB*Z(internal/api/event_schemas;event_schemasb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
+    b'\n\rfinance.proto\x12\x07\x66inance\x1a\x0cshared.proto\x1a\x1cgoogle/protobuf/struct.proto"$\n\x11GetBalanceRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t"l\n\x12GetBalanceResponse\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x12\n\naccount_id\x18\x02 \x01(\t\x12\x0f\n\x07\x62\x61lance\x18\x03 \x01(\x05\x12\x10\n\x08\x63urrency\x18\x04 \x01(\t\x12\x0e\n\x06\x63\x61\x63hed\x18\x05 \x01(\x08"\x83\x01\n\x05\x45vent\x12\x12\n\nevent_code\x18\x01 \x03(\t\x12\x0f\n\x07post_id\x18\x02 \x01(\t\x12\x11\n\tauthor_id\x18\x03 \x01(\t\x12\x17\n\x0fview_percentage\x18\x04 \x01(\r\x12)\n\x08metadata\x18\x05 \x01(\x0b\x32\x17.google.protobuf.Struct"x\n\x0fUserEngagedList\x12#\n\x06header\x18\x01 \x01(\x0b\x32\x13.shared.EventHeader\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x0c\n\x04role\x18\x03 \x01(\t\x12!\n\tpost_list\x18\x04 \x03(\x0b\x32\x0e.finance.Event2W\n\x0e\x42\x61lanceService\x12\x45\n\nGetBalance\x12\x1a.finance.GetBalanceRequest\x1a\x1b.finance.GetBalanceResponseB*Z(internal/api/event_schemas;event_schemasb\x06proto3'
+)
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'finance_pb2', _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "finance_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-  _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z(internal/api/event_schemas;event_schemas'
-  _globals['_GETBALANCEREQUEST']._serialized_start=40
-  _globals['_GETBALANCEREQUEST']._serialized_end=76
-  _globals['_GETBALANCERESPONSE']._serialized_start=78
-  _globals['_GETBALANCERESPONSE']._serialized_end=186
-  _globals['_EVENT']._serialized_start=188
-  _globals['_EVENT']._serialized_end=290
-  _globals['_USERENGAGEDLIST']._serialized_start=292
-  _globals['_USERENGAGEDLIST']._serialized_end=412
-  _globals['_BALANCESERVICE']._serialized_start=414
-  _globals['_BALANCESERVICE']._serialized_end=501
+    _globals["DESCRIPTOR"]._loaded_options = None
+    _globals["DESCRIPTOR"]._serialized_options = (
+        b"Z(internal/api/event_schemas;event_schemas"
+    )
+    _globals["_GETBALANCEREQUEST"]._serialized_start = 70
+    _globals["_GETBALANCEREQUEST"]._serialized_end = 106
+    _globals["_GETBALANCERESPONSE"]._serialized_start = 108
+    _globals["_GETBALANCERESPONSE"]._serialized_end = 216
+    _globals["_EVENT"]._serialized_start = 219
+    _globals["_EVENT"]._serialized_end = 350
+    _globals["_USERENGAGEDLIST"]._serialized_start = 352
+    _globals["_USERENGAGEDLIST"]._serialized_end = 472
+    _globals["_BALANCESERVICE"]._serialized_start = 474
+    _globals["_BALANCESERVICE"]._serialized_end = 561
 # @@protoc_insertion_point(module_scope)

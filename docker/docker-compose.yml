@@ -79,9 +79,12 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       APP_ENV: ${APP_ENV:-production}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      APP_NAME: finance-api
       APP_ENABLE_INBOX_CONSUMER: "false"
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
+      POSTGRES_POOL_MIN: ${API_POSTGRES_POOL_MIN:-5}
+      POSTGRES_POOL_MAX: ${API_POSTGRES_POOL_MAX:-20}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-1}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-60}
       GUNICORN_LOG_LEVEL: ${GUNICORN_LOG_LEVEL:-info}
@@ -117,6 +120,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       APP_ENV: ${APP_ENV:-production}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      APP_NAME: finance-inbox-worker
+      POSTGRES_POOL_MIN: ${INBOX_POSTGRES_POOL_MIN:-1}
+      POSTGRES_POOL_MAX: ${INBOX_POSTGRES_POOL_MAX:-10}
     depends_on:
       postgres:
         condition: service_healthy
@@ -149,6 +155,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       APP_ENV: ${APP_ENV:-production}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      APP_NAME: finance-batch-worker
+      POSTGRES_POOL_MIN: ${BATCH_POSTGRES_POOL_MIN:-1}
+      POSTGRES_POOL_MAX: ${BATCH_POSTGRES_POOL_MAX:-10}
       BATCH_SIZE: ${BATCH_SIZE:-500}
       BATCH_INTERVAL_SECONDS: ${BATCH_INTERVAL_SECONDS:-5}
     depends_on:

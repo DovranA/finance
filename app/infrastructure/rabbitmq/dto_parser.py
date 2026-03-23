@@ -53,7 +53,7 @@ def parse_user_engaged_list(body: bytes) -> UserEngagedListDTO:
             post_id=item.post_id,
             author_id=item.author_id,
             view_percentage=int(item.view_percentage),
-            role=item.role,
+            role="simple",
         )
         for item in payload.post_list
     ]

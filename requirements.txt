@@ -12,3 +12,4 @@ structlog==24.4.0
 httptools==0.6.4
 grpcio==1.78.0
 grpcio-health-checking==1.78.0
+prometheus-client==0.23.1

@@ -70,6 +70,8 @@ class AppSettings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     enable_inbox_consumer: bool = True
+    enable_metrics: bool = True
+    metrics_db_interval_seconds: float = 5.0
 
 
 class BatchSettings(BaseSettings):
