@@ -71,6 +71,7 @@ class AppSettings(BaseSettings):
     port: int = 8000
     enable_inbox_consumer: bool = True
     enable_metrics: bool = True
+    metrics_port: int | None = None
     metrics_db_interval_seconds: float = 5.0
 
 

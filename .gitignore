@@ -165,3 +165,6 @@ batch_user_seeder.sh
 /tests
 command.md
 .python-version
+/grafana-provisioning
+prometheus.yml
+debezium.properties

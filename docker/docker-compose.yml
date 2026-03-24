@@ -3,6 +3,14 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: finance-postgres
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
     networks:
       - finance-network
     environment:
@@ -121,6 +129,8 @@ services:
       APP_ENV: ${APP_ENV:-production}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
       APP_NAME: finance-inbox-worker
+      APP_ENABLE_METRICS: "true"
+      APP_METRICS_PORT: 8001
       POSTGRES_POOL_MIN: ${INBOX_POSTGRES_POOL_MIN:-1}
       POSTGRES_POOL_MAX: ${INBOX_POSTGRES_POOL_MAX:-10}
     depends_on:
@@ -156,6 +166,8 @@ services:
       APP_ENV: ${APP_ENV:-production}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
       APP_NAME: finance-batch-worker
+      APP_ENABLE_METRICS: "true"
+      APP_METRICS_PORT: 8002
       POSTGRES_POOL_MIN: ${BATCH_POSTGRES_POOL_MIN:-1}
       POSTGRES_POOL_MAX: ${BATCH_POSTGRES_POOL_MAX:-10}
       BATCH_SIZE: ${BATCH_SIZE:-500}
@@ -169,6 +181,37 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  
+  # debezium:
+  #   image: quay.io/debezium/server:3.4.0.Final
+  #   container_name: finance-debezium
+  #   networks:
+  #     - finance-network
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ../debezium.properties:/debezium/config/application.properties
+  #     - debeziumdata:/tmp
+  #   environment:
+  #     POSTGRES_HOST: postgres
+  #     POSTGRES_PORT: 5432
+  #     POSTGRES_DB: ${POSTGRES_DB:-finance_db}
+  #     POSTGRES_USER: ${POSTGRES_USER:-finance_user}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance_secret}
+  #     DEBEZIUM_TABLE_INCLUDE_LIST: ${DEBEZIUM_TABLE_INCLUDE_LIST:-public.outboxevent}
+  #     DEBEZIUM_SLOT_NAME: ${DEBEZIUM_SLOT_NAME:-finance_debezium}
+  #     DEBEZIUM_PUBLICATION_NAME: ${DEBEZIUM_PUBLICATION_NAME:-finance_outbox_pub}
+  #     RABBITMQ_HOST: rabbitmq
+  #     RABBITMQ_PORT: 5672
+  #     RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+  #     RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+  #     RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-finance}
+  #     QUARKUS_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+
   redisinsight-finance:
     image: redis/redisinsight:latest
     container_name: ${DOCKER_COMPOSE_PROJECT_NAME:-finance}-redisinsight-1
@@ -178,10 +221,64 @@ services:
       - finance-network
     depends_on:
       - redis
+
+  # ── Prometheus ─────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: finance-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_storage:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - finance-network
+    depends_on:
+      - finance-api
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Grafana ────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: finance-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel"
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - grafana_storage:/var/lib/grafana
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    networks:
+      - finance-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
   redisdata:
   rabbitmqdata:
+  debeziumdata:
+  prometheus_storage:
+  grafana_storage:
 
 networks:
   finance-network:

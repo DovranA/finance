@@ -5,11 +5,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import time
 import uuid
 from pathlib import Path
 
+from prometheus_client import start_http_server
+
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.core.metrics import AppMetrics, register_metrics
 from app.di import create_container
 from asyncpg import Pool
 from app.infrastructure.db.transaction import transaction
@@ -24,8 +28,10 @@ class RuleBatchWorker:
     def __init__(self) -> None:
         self._settings = get_settings()
         self._stop = asyncio.Event()
+        self._metrics: AppMetrics | None = None
 
     async def run(self) -> None:
+        self._metrics = await register_metrics()
         container = create_container()
 
         async with container() as request_scope:
@@ -59,8 +65,11 @@ class RuleBatchWorker:
         pool: Pool,
         batch_uc: BatchApplyRuleUseCase,
     ) -> None:
+        flush_started_at = time.perf_counter()
         rows = await self._claim_pending_rows(pool, self._settings.batch.size)
         if not rows:
+            if self._metrics is not None:
+                self._metrics.inc_inbox_batch_run("empty")
             return
 
         grouped: dict[str, list[dict]] = {}
@@ -77,14 +86,38 @@ class RuleBatchWorker:
             )
 
         for event_code, items in grouped.items():
-            result = await batch_uc.execute(event_code=event_code, items=items)
-            await self._mark_batch_result(pool, result)
+            started_at = time.perf_counter()
+            try:
+                result = await batch_uc.execute(event_code=event_code, items=items)
+                await self._mark_batch_result(pool, result)
+            except Exception:
+                if self._metrics is not None:
+                    self._metrics.inc_inbox_batch_run("failed")
+                raise
+
+            if self._metrics is not None:
+                self._metrics.observe_inbox_batch_duration(
+                    event_code=event_code,
+                    duration_seconds=time.perf_counter() - started_at,
+                )
+                self._metrics.inc_inbox_batch_run("success")
+
+                for item in result.get("results", []):
+                    stage = "applied" if item.get("applied") else "apply_failed"
+                    self._metrics.inc_inbox_events(stage, event_code)
+
             logger.info(
                 "rule_batch_flushed",
                 event_code=event_code,
                 total=result["total"],
                 applied=result["applied"],
                 failed=result["failed"],
+            )
+
+        if self._metrics is not None:
+            self._metrics.observe_inbox_batch_duration(
+                event_code="all",
+                duration_seconds=time.perf_counter() - flush_started_at,
             )
 
     async def _claim_pending_rows(self, pool: Pool, size: int):
@@ -130,6 +163,15 @@ class RuleBatchWorker:
 
 async def run_worker() -> None:
     worker = RuleBatchWorker()
+
+    if worker._settings.app.enable_metrics and worker._settings.app.metrics_port:
+        start_http_server(worker._settings.app.metrics_port)
+        logger.info(
+            "worker_metrics_server_started",
+            worker="batch_worker",
+            port=worker._settings.app.metrics_port,
+        )
+
     await worker.run()
 
 

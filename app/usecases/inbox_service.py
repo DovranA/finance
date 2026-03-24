@@ -6,6 +6,7 @@ import json
 
 from asyncpg import Pool
 
+from app.core.metrics import register_metrics
 from app.infrastructure.rabbitmq.event_types import InboxEvent
 
 
@@ -19,6 +20,8 @@ class InboxService:
         if not events:
             return
 
+        metrics = await register_metrics()
+
         records = [
             (
                 event.event_id,
@@ -30,11 +33,22 @@ class InboxService:
             for event in events
         ]
 
+        for event in events:
+            metrics.inc_inbox_events("queued_for_insert", event.event_code)
+
         async with self._pool.acquire() as conn:
-            await conn.executemany(
-                "INSERT INTO rule_action_inbox "
-                "(event_id, event_code, user_id, role, metadata, status) "
-                "VALUES ($1, $2, $3, $4, $5::jsonb, 'pending') "
-                "ON CONFLICT (event_id) DO NOTHING",
-                records,
-            )
+            try:
+                await conn.executemany(
+                    "INSERT INTO rule_action_inbox "
+                    "(event_id, event_code, user_id, role, metadata, status) "
+                    "VALUES ($1, $2, $3, $4, $5::jsonb, 'pending') "
+                    "ON CONFLICT (event_id) DO NOTHING",
+                    records,
+                )
+            except Exception:
+                for event in events:
+                    metrics.inc_inbox_events("insert_failed", event.event_code)
+                raise
+
+        for event in events:
+            metrics.inc_inbox_events("inserted", event.event_code)

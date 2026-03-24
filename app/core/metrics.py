@@ -50,6 +50,43 @@ class AppMetrics:
             ["usename", "application_name"],
         )
 
+        self.rabbitmq_messages_total = Counter(
+            "rabbitmq_messages_total",
+            "Total RabbitMQ messages by consumer, queue, and status",
+            ["consumer", "queue", "status"],
+        )
+        self.rabbitmq_processing_duration = Histogram(
+            "rabbitmq_message_processing_duration_seconds",
+            "Message processing latency in RabbitMQ consumers",
+            ["consumer", "queue"],
+        )
+        self.rabbitmq_consumer_up = Gauge(
+            "rabbitmq_consumer_up",
+            "Whether RabbitMQ consumer is registered and running",
+            ["consumer", "queue"],
+        )
+
+        self.inbox_events_total = Counter(
+            "inbox_events_total",
+            "Total inbox events by stage and event code",
+            ["stage", "event_code"],
+        )
+        self.inbox_backlog = Gauge(
+            "inbox_backlog",
+            "Current inbox rows by status",
+            ["status"],
+        )
+        self.inbox_batch_runs_total = Counter(
+            "inbox_batch_runs_total",
+            "Total inbox batch runs by status",
+            ["status"],
+        )
+        self.inbox_batch_duration = Histogram(
+            "inbox_batch_duration_seconds",
+            "Duration of inbox batch processing by event code",
+            ["event_code"],
+        )
+
         self._sample_count = 0
 
     def observe_latency(
@@ -93,6 +130,52 @@ class AppMetrics:
         self.db_pool_wait_duration.set(0.0)
 
         await self._record_active_connections(pool)
+        await self._record_inbox_backlog(pool)
+
+    def observe_rabbitmq_processing(
+        self,
+        consumer: str,
+        queue: str,
+        duration_seconds: float,
+    ) -> None:
+        self.rabbitmq_processing_duration.labels(
+            consumer=consumer,
+            queue=queue,
+        ).observe(duration_seconds)
+
+    def inc_rabbitmq_message(
+        self,
+        consumer: str,
+        queue: str,
+        status: str,
+    ) -> None:
+        self.rabbitmq_messages_total.labels(
+            consumer=consumer,
+            queue=queue,
+            status=status,
+        ).inc()
+
+    def set_rabbitmq_consumer_up(self, consumer: str, queue: str, is_up: bool) -> None:
+        self.rabbitmq_consumer_up.labels(
+            consumer=consumer,
+            queue=queue,
+        ).set(1.0 if is_up else 0.0)
+
+    def inc_inbox_events(self, stage: str, event_code: str, amount: int = 1) -> None:
+        self.inbox_events_total.labels(
+            stage=stage,
+            event_code=event_code,
+        ).inc(float(amount))
+
+    def inc_inbox_batch_run(self, status: str) -> None:
+        self.inbox_batch_runs_total.labels(status=status).inc()
+
+    def observe_inbox_batch_duration(
+        self, event_code: str, duration_seconds: float
+    ) -> None:
+        self.inbox_batch_duration.labels(event_code=event_code).observe(
+            duration_seconds
+        )
 
     async def _record_active_connections(self, pool: Pool) -> None:
         query = (
@@ -112,6 +195,19 @@ class AppMetrics:
                 usename=usename,
                 application_name=app_name,
             ).set(float(row["cnt"]))
+
+    async def _record_inbox_backlog(self, pool: Pool) -> None:
+        query = (
+            "SELECT status, COUNT(*) AS cnt "
+            "FROM rule_action_inbox "
+            "GROUP BY status"
+        )
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(query)
+
+        self.inbox_backlog.clear()
+        for row in rows:
+            self.inbox_backlog.labels(status=row["status"]).set(float(row["cnt"]))
 
 
 _metrics_instance: AppMetrics | None = None

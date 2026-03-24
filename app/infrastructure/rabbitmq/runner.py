@@ -11,6 +11,7 @@ from dishka import AsyncContainer
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.core.metrics import register_metrics
 from app.infrastructure.rabbitmq.connection import (
     create_channel,
     create_connection,
@@ -39,6 +40,7 @@ class ConsumerSpec:
 async def run_consumers(container: AsyncContainer, specs: list[ConsumerSpec]) -> None:
     settings = get_settings()
     rabbit = settings.rabbitmq
+    metrics = await register_metrics()
 
     connection = await create_connection(rabbit)
     channel = await create_channel(connection, prefetch_count=rabbit.prefetch_count)
@@ -66,6 +68,7 @@ async def run_consumers(container: AsyncContainer, specs: list[ConsumerSpec]) ->
 
             queue = await channel.get_queue(spec.queue)
             await queue.consume(lambda msg, h=spec.handler: h(msg, container))
+            metrics.set_rabbitmq_consumer_up(spec.name, spec.queue, True)
             logger.info(
                 "rabbitmq_consumer_registered",
                 consumer=spec.name,
@@ -76,5 +79,7 @@ async def run_consumers(container: AsyncContainer, specs: list[ConsumerSpec]) ->
 
         await asyncio.Future()
     finally:
+        for spec in specs:
+            metrics.set_rabbitmq_consumer_up(spec.name, spec.queue, False)
         await channel.close()
         await connection.close()
