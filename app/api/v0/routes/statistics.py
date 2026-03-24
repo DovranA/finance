@@ -6,7 +6,7 @@ from typing import Literal
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, Header, HTTPException, Query
 
-from app.api.schemas.statistics import (
+from app.api.v0.schemas.statistics import (
     AdminTopByAmountResponse,
     AdminStreaksResponse,
     AdminSystemSummaryResponse,

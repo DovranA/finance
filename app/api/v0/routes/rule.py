@@ -5,12 +5,11 @@ import uuid
 from fastapi import APIRouter, Body, Query
 from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
-from app.api.schemas.rule import (
+from app.api.v0.schemas.rule import (
     ApplyRuleRequest,
     BatchApplyRuleRequest,
     BatchApplyRuleResponse,
     CreateRuleRequest,
-    RuleLang,
     UpdateRuleRequest,
     RuleResponse,
     RuleListResponse,

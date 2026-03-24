@@ -389,9 +389,7 @@ class ApplyRuleUseCase:
         actions = rule.actions
         direction = LedgerDirection(actions.get("direction", 1))
         amount = (
-            amount_override
-            if amount_override is not None
-            else actions.get("reward", actions.get("amount", 0))
+            amount_override if amount_override is not None else actions.get("amount", 0)
         )
         if amount <= 0:
             return None
@@ -471,7 +469,7 @@ class ApplyRuleUseCase:
 
         actions = rule.actions
         direction = LedgerDirection(actions.get("direction", 1))
-        amount = actions.get("reward", actions.get("amount", 0))
+        amount = actions.get("amount", 0)
         if amount <= 0:
             return None
 

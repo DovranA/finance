@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Body
 from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
-from app.api.schemas.account import BalanceResponse, NewBalanceRequest
+from app.api.v0.schemas.account import BalanceResponse, NewBalanceRequest
 from app.usecases.get_balance import GetBalanceUseCase
 from app.usecases.set_balance import SetBalanceUseCase
 

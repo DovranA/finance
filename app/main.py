@@ -12,10 +12,9 @@ from asyncpg import Pool
 from dishka.integrations.fastapi import setup_dishka
 from prometheus_client import make_asgi_app
 
-from app.api.routes import accounts
-from app.api.routes import rule
-from app.api.routes import statistics
-from app.api.schemas.common import HealthResponse
+from app.api.v0 import router as router_v0
+
+from app.api.v0.schemas.common import HealthResponse
 from app.core.config import get_settings
 from app.core.logging import setup_logging, get_logger
 from app.core.metrics import register_metrics, AppMetrics
@@ -117,10 +116,7 @@ def create_app() -> FastAPI:
     setup_dishka(container, app)
     app.state.container = container
     # ── Register routers ─────────────────────────────────
-    app.include_router(accounts.router)
-    app.include_router(rule.router)
-    app.include_router(statistics.client_router)
-    app.include_router(statistics.admin_router)
+    app.include_router(router_v0, prefix="/api")
 
     # ── Exception handlers ───────────────────────────────
     @app.exception_handler(AccountNotFound)
