@@ -15,7 +15,7 @@ class PgRuleRepository(RuleRepository):
 
     async def get_by_id(self, rule_id: uuid.UUID, conn: Connection) -> Rule | None:
         row = await conn.fetchrow(
-            "SELECT id, event_code, description, description_i18n, conditions, actions, "
+            "SELECT id, event_code, description_i18n, conditions, actions, "
             "priority, is_active, expired_at, created_at, updated_at "
             "FROM rules WHERE id = $1",
             rule_id,
@@ -24,7 +24,7 @@ class PgRuleRepository(RuleRepository):
 
     async def get_by_event_code(self, event_code: str, conn: Connection) -> list[Rule]:
         rows = await conn.fetch(
-            "SELECT id, event_code, description, description_i18n, conditions, actions, "
+            "SELECT id, event_code,  description_i18n, conditions, actions, "
             "priority, is_active, expired_at, created_at, updated_at "
             "FROM rules WHERE event_code = $1 ORDER BY priority DESC",
             event_code,
@@ -35,7 +35,7 @@ class PgRuleRepository(RuleRepository):
         self, event_code: str, conn: Connection
     ) -> Rule | None:
         row = await conn.fetchrow(
-            "SELECT id, event_code, description, description_i18n, conditions, actions, "
+            "SELECT id, event_code, description_i18n, conditions, actions, "
             "priority, is_active, expired_at, created_at, updated_at "
             "FROM rules "
             "WHERE event_code = $1 AND is_active = TRUE "
@@ -49,7 +49,7 @@ class PgRuleRepository(RuleRepository):
         self, conn: Connection, limit: int = 50, offset: int = 0
     ) -> list[Rule]:
         rows = await conn.fetch(
-            "SELECT id, event_code, description, description_i18n, conditions, actions, "
+            "SELECT id, event_code, description_i18n, conditions, actions, "
             "priority, is_active, expired_at, created_at, updated_at "
             "FROM rules ORDER BY created_at DESC LIMIT $1 OFFSET $2",
             limit,
@@ -61,12 +61,11 @@ class PgRuleRepository(RuleRepository):
 
         await conn.execute(
             "INSERT INTO rules "
-            "(id, event_code, description, description_i18n, conditions, actions, "
+            "(id, event_code, description_i18n, conditions, actions, "
             "priority, is_active, expired_at, created_at, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
             rule.id,
             rule.event_code,
-            rule.description,
             orjson.dumps(rule.description_i18n or {}).decode(),
             orjson.dumps(rule.conditions).decode(),
             orjson.dumps(rule.actions).decode(),
@@ -79,12 +78,11 @@ class PgRuleRepository(RuleRepository):
 
     async def update(self, rule: Rule, conn: Connection) -> None:
         await conn.execute(
-            "UPDATE rules SET event_code = $1, description = $2, "
-            "description_i18n = $3, conditions = $4, actions = $5, priority = $6, "
-            "is_active = $7, expired_at = $8, updated_at = NOW() "
-            "WHERE id = $9",
+            "UPDATE rules SET event_code = $1, "
+            "description_i18n = $2, conditions = $3, actions = $4, priority = $5, "
+            "is_active = $6, expired_at = $7, updated_at = NOW() "
+            "WHERE id = $8",
             rule.event_code,
-            rule.description,
             orjson.dumps(rule.description_i18n or {}).decode(),
             orjson.dumps(rule.conditions).decode(),
             orjson.dumps(rule.actions).decode(),
@@ -111,7 +109,6 @@ class PgRuleRepository(RuleRepository):
         return Rule(
             id=row["id"],
             event_code=row["event_code"],
-            description=row["description"],
             description_i18n=description_i18n,
             conditions=conditions,
             actions=actions,

@@ -168,3 +168,4 @@ command.md
 /grafana-provisioning
 prometheus.yml
 debezium.properties
+/.github

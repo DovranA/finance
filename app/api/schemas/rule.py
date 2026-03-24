@@ -27,7 +27,7 @@ class RuleAction(BaseModel):
     direction: int = 1  # 1 = credit, -1 = debit
     amount: int = 0
     reward: int | None = None
-    currency: str = "TMT"
+    currency: str = "TOKEN"
     target_users: list[str] | None = None
     target_amounts: dict[str, int] | None = None
 
@@ -64,9 +64,7 @@ class UpdateRuleRequest(BaseModel):
 class RuleResponse(BaseModel):
     id: uuid.UUID
     event_code: str
-    description: str | None
     description_i18n: RuleDescriptionI18n | None = None
-    localized_description: str | None = None
     conditions: dict[str, Any]
     actions: dict[str, Any]
     priority: int

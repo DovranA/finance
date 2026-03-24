@@ -87,8 +87,11 @@ class ApplyRuleUseCase:
                 account = await self._get_or_create_account_for_update(user_id, conn)
                 account.ensure_active()
 
+                rule_currency = (rule.actions or {}).get("currency", account.currency)
                 treasury = await self._account_repo.get_by_account_type(
-                    AccountTypes.TREASURY, conn
+                    AccountTypes.TREASURY,
+                    conn,
+                    rule_currency,
                 )
 
                 result = await self._apply_single_rule(
@@ -142,8 +145,11 @@ class ApplyRuleUseCase:
                     ],
                 }
 
+            rule_currency = (rule.actions or {}).get("currency", "TOKEN")
             treasury = await self._account_repo.get_by_account_type(
-                AccountTypes.TREASURY, conn
+                AccountTypes.TREASURY,
+                conn,
+                rule_currency,
             )
 
             accounts_cache: dict[uuid.UUID, Account] = {}
@@ -236,7 +242,7 @@ class ApplyRuleUseCase:
                                     "event_code": event_code,
                                     "direction": int(direction),
                                     "amount": amount,
-                                    "currency": calc_res.get("currency", "TMT"),
+                                    "currency": calc_res.get("currency", "TOKEN"),
                                     "status": "applied",
                                     "target_user_id": str(user_id),
                                     "target_key": target_key,
@@ -319,7 +325,6 @@ class ApplyRuleUseCase:
             Rule(
                 id=uuid.UUID(r["id"]),
                 event_code=r["event_code"],
-                description=r.get("description"),
                 description_i18n=r.get("description_i18n"),
                 conditions=_ensure_dict(r.get("conditions", {})),
                 actions=_ensure_dict(r.get("actions", {})),
@@ -343,7 +348,6 @@ class ApplyRuleUseCase:
             {
                 "id": str(r.id),
                 "event_code": r.event_code,
-                "description": r.description,
                 "description_i18n": r.description_i18n or {},
                 "conditions": r.conditions,
                 "actions": r.actions,
@@ -436,7 +440,7 @@ class ApplyRuleUseCase:
             "direction": direction,
             "idem_key": rule_idem_key,
             "status": "applied",
-            "currency": actions.get("currency", "TMT"),
+            "currency": actions.get("currency", "TOKEN"),
         }
 
     # ── Single rule application ──────────────────────────
@@ -496,7 +500,7 @@ class ApplyRuleUseCase:
             "event_code": event_code,
             "direction": int(direction),
             "amount": amount,
-            "currency": actions.get("currency", "TMT"),
+            "currency": actions.get("currency", "TOKEN"),
             "status": "applied",
         }
 

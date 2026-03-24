@@ -27,7 +27,7 @@ from typing import Any, Optional
 #     direction: int = 1  # 1 = credit, -1 = debit
 #     amount: Optional[int] = None
 #     reward: Optional[int] = None
-#     currency: str = "TMT"
+#     currency: str = "TOKEN"
 
 
 @dataclass
@@ -41,7 +41,6 @@ class Rule:
 
     id: uuid.UUID
     event_code: str
-    description: str | None
     description_i18n: dict[str, str] | None
     conditions: dict[str, Any]
     actions: dict[str, Any]

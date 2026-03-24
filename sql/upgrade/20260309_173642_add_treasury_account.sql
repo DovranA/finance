@@ -14,7 +14,27 @@ INSERT INTO
 VALUES (
         gen_random_uuid (),
         'treasury',
-        'TMT',
+        'TOKEN',
+        1000000,
+        true
+    )
+ON CONFLICT (owner_type, currency, user_id) DO
+UPDATE
+SET
+    balance = EXCLUDED.balance;
+
+INSERT INTO
+    accounts (
+        id,
+        owner_type,
+        currency,
+        balance,
+        is_active
+    )
+VALUES (
+        gen_random_uuid (),
+        'treasury',
+        'COIN',
         1000000,
         true
     )

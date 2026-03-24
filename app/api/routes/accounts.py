@@ -16,9 +16,10 @@ router = APIRouter(prefix="/accounts", tags=["Accounts"], route_class=DishkaRout
 async def get_balance(
     user_id: uuid.UUID,
     uc: FromDishka[GetBalanceUseCase],
+    currency: str | None = None,
 ) -> BalanceResponse:
     """Get the balance for a user account."""
-    result = await uc.execute(user_id=user_id)
+    result = await uc.execute(user_id=user_id, currency=currency)
     return BalanceResponse(**result)
 
 
@@ -29,5 +30,9 @@ async def set_new_balance(
     data: NewBalanceRequest = Body(...),
 ) -> BalanceResponse:
     """Get the balance for a user account."""
-    result = await uc.execute(user_id=user_id, new_balance=data.new_balance)
+    result = await uc.execute(
+        user_id=user_id,
+        new_balance=data.new_balance,
+        currency=data.currency,
+    )
     return BalanceResponse(**result)

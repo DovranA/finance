@@ -9,7 +9,7 @@ class Currency(StrEnum):
     USD = "USD"
     EUR = "EUR"
     RUB = "RUB"
-    TMT = "TMT"
+    TOKEN = "TOKEN"
     COIN = "COIN"
     DIAMOND = "DIAMOND"
 

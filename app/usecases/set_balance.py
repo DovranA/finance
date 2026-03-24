@@ -39,10 +39,11 @@ class SetBalanceUseCase:
 
     # ── Public entry point ───────────────────────────────
 
-    async def execute(self, user_id: UUID, new_balance: int) -> dict:
+    async def execute(self, user_id: UUID, new_balance: int, currency: str) -> dict:
+        currency = currency.upper()
         async with transaction(self._pool) as conn:
-            account = await self._get_or_create_account(user_id, conn)
-            treasury = await self._get_treasury(conn)
+            account = await self._get_or_create_account(user_id, currency, conn)
+            treasury = await self._get_treasury(conn, currency)
 
             delta = new_balance - account.balance
             if delta == 0:
@@ -63,20 +64,33 @@ class SetBalanceUseCase:
 
     # ── Account resolution ───────────────────────────────
 
-    async def _get_or_create_account(self, user_id: UUID, conn: Connection) -> Account:
-        account = await self._account_repo.get_by_owner_id(user_id, conn)
-        if not account:
-            new_account = Account.create(user_id, owner_type="user")
+    async def _get_or_create_account(
+        self,
+        user_id: UUID,
+        currency: str,
+        conn: Connection,
+    ) -> Account:
+        accounts = await self._account_repo.list_by_owner_id(user_id, conn)
+        account = next(
+            (a for a in accounts if a.currency.upper() == currency.upper()),
+            None,
+        )
+        if account is None:
+            new_account = Account.create(user_id, currency=currency, owner_type="user")
             await self._account_repo.create(new_account, conn=conn)
             account = new_account
         return account
 
-    async def _get_treasury(self, conn: Connection) -> Account:
+    async def _get_treasury(self, conn: Connection, currency: str) -> Account:
         treasury = await self._account_repo.get_by_account_type(
-            AccountTypes.TREASURY, conn
+            AccountTypes.TREASURY,
+            conn,
+            currency,
         )
         if not treasury:
-            raise AccountNotFound("Treasury account not found")
+            raise AccountNotFound(
+                f"Treasury account not found for currency '{currency}'"
+            )
         return treasury
 
     # ── Transaction & ledger ─────────────────────────────
@@ -158,8 +172,14 @@ class SetBalanceUseCase:
     def _build_response(user_id: UUID, account: Account) -> dict:
         return {
             "user_id": str(user_id),
-            "account_id": str(account.id),
-            "balance": account.balance,
-            "currency": account.currency,
             "found": True,
+            "cached": False,
+            "balances": [
+                {
+                    "account_id": str(account.id),
+                    "currency": account.currency,
+                    "balance": account.balance,
+                    "cached": False,
+                }
+            ],
         }

@@ -19,7 +19,7 @@ WHERE
     is_active = TRUE;
 
 -- Seed: official rule
--- direction = -1 (debit), min_balance = 200, currency TMT, expires in 30 days
+-- direction = -1 (debit), min_balance = 200, currency TOKEN, expires in 30 days
 INSERT INTO
     rules (
         event_code,
@@ -32,15 +32,15 @@ INSERT INTO
 VALUES (
         'official',
         'Official event — debit with min balance check',
-        '{"min_balance": 200}'::jsonb,
-        '{"direction": -1, "currency": "TMT"}'::jsonb,
+        '{"min_balance": 1000}'::jsonb,
+        '{"direction": -1, "currency": "TOKEN", "amount":1000}'::jsonb,
         10,
         NOW() + INTERVAL '30 days'
     )
 ON CONFLICT (event_code) DO NOTHING;
 
 -- Seed: repost rule
--- direction = 1 (credit), reward = 3, currency TMT, role = [official, simple]
+-- direction = 1 (credit), reward = 3, currency TOKEN, role = [official, simple]
 INSERT INTO
     rules (
         event_code,
@@ -53,7 +53,7 @@ VALUES (
         'repost',
         'Repost event — credit reward with role check',
         '{"role_required": ["official", "simple"]}'::jsonb,
-        '{"direction": 1, "currency": "TMT", "reward": 3}'::jsonb,
+        '{"direction": 1, "currency": "TOKEN", "amount": 3}'::jsonb,
         10
     )
 ON CONFLICT (event_code) DO NOTHING;

@@ -28,26 +28,10 @@ from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
 router = APIRouter(prefix="/rules", tags=["Rules"], route_class=DishkaRoute)
 
 
-def _resolve_localized_description(
-    description_i18n: dict | None,
-    description: str | None,
-    lang: RuleLang | None,
-) -> str | None:
-    if not isinstance(description_i18n, dict):
-        description_i18n = {}
-
-    if lang and description_i18n.get(lang):
-        return description_i18n.get(lang)
-    if description_i18n.get("en"):
-        return description_i18n.get("en")
-    return description
-
-
 @router.post("", response_model=RuleResponse, status_code=201)
 async def create_rule(
     uc: FromDishka[CreateRuleUseCase],
     data: CreateRuleRequest = Body(...),
-    lang: RuleLang | None = Query(None),
 ) -> RuleResponse:
     rule = await uc.execute(
         event_code=data.event_code,
@@ -65,13 +49,7 @@ async def create_rule(
     return RuleResponse(
         id=rule.id,
         event_code=rule.event_code,
-        description=rule.description,
         description_i18n=rule.description_i18n,
-        localized_description=_resolve_localized_description(
-            rule.description_i18n,
-            rule.description,
-            lang,
-        ),
         conditions=rule.conditions,
         actions=rule.actions,
         priority=rule.priority,
@@ -86,19 +64,12 @@ async def create_rule(
 async def get_rule(
     rule_id: uuid.UUID,
     uc: FromDishka[GetRuleUseCase],
-    lang: RuleLang | None = Query(None),
 ) -> RuleResponse:
     rule = await uc.execute(rule_id=rule_id)
     return RuleResponse(
         id=rule.id,
         event_code=rule.event_code,
-        description=rule.description,
         description_i18n=rule.description_i18n,
-        localized_description=_resolve_localized_description(
-            rule.description_i18n,
-            rule.description,
-            lang,
-        ),
         conditions=rule.conditions,
         actions=rule.actions,
         priority=rule.priority,
@@ -112,24 +83,16 @@ async def get_rule(
 @router.get("", response_model=RuleListResponse)
 async def list_rules(
     uc: FromDishka[ListRulesUseCase],
-    event_code: str | None = Query(None),
-    lang: RuleLang | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> RuleListResponse:
-    rules = await uc.execute(limit=limit, offset=offset, event_code=event_code)
+    rules = await uc.execute(limit=limit, offset=offset)
     return RuleListResponse(
         rules=[
             RuleResponse(
                 id=r.id,
                 event_code=r.event_code,
-                description=r.description,
                 description_i18n=r.description_i18n,
-                localized_description=_resolve_localized_description(
-                    r.description_i18n,
-                    r.description,
-                    lang,
-                ),
                 conditions=r.conditions,
                 actions=r.actions,
                 priority=r.priority,
@@ -149,7 +112,6 @@ async def update_rule(
     rule_id: uuid.UUID,
     uc: FromDishka[UpdateRuleUseCase],
     data: UpdateRuleRequest = Body(...),
-    lang: RuleLang | None = Query(None),
 ) -> RuleResponse:
     rule = await uc.execute(
         rule_id=rule_id,
@@ -169,13 +131,7 @@ async def update_rule(
     return RuleResponse(
         id=rule.id,
         event_code=rule.event_code,
-        description=rule.description,
         description_i18n=rule.description_i18n,
-        localized_description=_resolve_localized_description(
-            rule.description_i18n,
-            rule.description,
-            lang,
-        ),
         conditions=rule.conditions,
         actions=rule.actions,
         priority=rule.priority,

@@ -19,7 +19,7 @@ class Account:
     balance: int
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     owner_type: str | None = None
-    currency: str = "TMT"
+    currency: str = "TOKEN"
     is_active: bool = True
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -49,7 +49,7 @@ class Account:
     def create(
         cls,
         user_id: uuid.UUID | None,
-        currency: str = "TMT",
+        currency: str = "TOKEN",
         owner_type: str | None = None,
     ) -> Account:
         return cls(

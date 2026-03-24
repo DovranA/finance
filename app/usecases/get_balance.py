@@ -27,42 +27,60 @@ class GetBalanceUseCase:
         self._account_repo = account_repo
         self._cache = cache
 
-    async def execute(self, user_id: uuid.UUID) -> dict:
+    async def execute(self, user_id: uuid.UUID, currency: str | None = None) -> dict:
+        requested_currency = currency.upper() if currency else None
+
         # Read-only — no transaction needed, just acquire a connection
         async with self._pool.acquire() as conn:
-            account = await self._account_repo.get_by_owner_id(user_id, conn)
+            accounts = await self._account_repo.list_by_owner_id(user_id, conn)
 
-        if account is None:
+        if not accounts:
             return {
                 "user_id": str(user_id),
-                "balance": 0,
-                "currency": Currency.TMT,
                 "found": False,
+                "balances": [],
             }
 
-        # Check cache
-        if self._cache:
-            cached = await self._cache.get_cached_balance(account.id)
-            if cached is not None:
-                logger.debug("balance_cache_hit", user_id=str(user_id))
-                return {
-                    "user_id": str(user_id),
-                    "account_id": str(account.id),
-                    "balance": cached,
-                    "currency": account.currency,
-                    "found": True,
-                    "cached": True,
-                }
+        balances: list[dict] = []
+        selected = None
 
-        # Set cache
-        if self._cache:
-            await self._cache.set_cached_balance(account.id, account.balance)
+        for account in accounts:
+            cached_flag = False
+            value = account.balance
+
+            if self._cache:
+                cached_val = await self._cache.get_cached_balance(account.id)
+                if cached_val is not None:
+                    value = cached_val
+                    cached_flag = True
+                else:
+                    await self._cache.set_cached_balance(account.id, account.balance)
+
+            item = {
+                "account_id": str(account.id),
+                "currency": account.currency,
+                "balance": value,
+                "cached": cached_flag,
+            }
+            balances.append(item)
+
+            if requested_currency and account.currency.upper() == requested_currency:
+                selected = item
+
+        if requested_currency and selected is None:
+            return {
+                "user_id": str(user_id),
+                "found": False,
+                "cached": False,
+                "balances": balances,
+            }
+
+        if selected is None:
+            selected = balances[0]
 
         return {
             "user_id": str(user_id),
-            "account_id": str(account.id),
-            "balance": account.balance,
-            "currency": account.currency,
             "found": True,
-            "cached": False,
+            "cached": selected["cached"],
+            "balances": balances,
         }

@@ -8,7 +8,7 @@ WHERE
         SELECT id
         FROM accounts
         WHERE
-            currency = 'TMT'
+            currency = 'TOKEN'
             AND owner_type = 'treasury'
     );
 
@@ -18,13 +18,13 @@ WHERE
         SELECT id::text
         FROM accounts
         WHERE
-            currency = 'TMT'
+            currency = 'TOKEN'
             AND owner_type = 'treasury'
     );
 
 DELETE FROM accounts
 WHERE
-    currency = 'TMT'
+    currency = 'TOKEN'
     AND owner_type = 'treasury';
 
 DROP INDEX IF EXISTS uniq_accounts_owner_currency;

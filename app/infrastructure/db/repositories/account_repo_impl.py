@@ -8,6 +8,7 @@ from asyncpg import Connection
 
 from app.domain.entities.account import Account
 from app.domain.repositories.account_repo import AccountRepository
+from app.domain.value_objects.enums import AccountTypes
 
 logger = get_logger(__name__)
 
@@ -40,10 +41,19 @@ class PgAccountRepository(AccountRepository):
         self, user_id: uuid.UUID, conn: Connection
     ) -> Account | None:
         row = await conn.fetchrow(
-            f"SELECT {_SELECT_COLS} FROM accounts WHERE user_id = $1",
+            f"SELECT {_SELECT_COLS} FROM accounts WHERE user_id = $1 ORDER BY currency",
             user_id,
         )
         return self._to_entity(row) if row else None
+
+    async def list_by_owner_id(
+        self, user_id: uuid.UUID, conn: Connection
+    ) -> list[Account]:
+        rows = await conn.fetch(
+            f"SELECT {_SELECT_COLS} FROM accounts WHERE user_id = $1 ORDER BY currency",
+            user_id,
+        )
+        return [self._to_entity(row) for row in rows]
 
     async def get_for_update(
         self, account_id: uuid.UUID, conn: Connection
@@ -55,7 +65,7 @@ class PgAccountRepository(AccountRepository):
         return self._to_entity(row) if row else None
 
     async def get_or_create_by_owner_id(
-        self, user_id: uuid.UUID, conn: Connection, currency: str = "TMT"
+        self, user_id: uuid.UUID, conn: Connection, currency: str = "TOKEN"
     ) -> Account:
         account = await self.get_by_owner_id(user_id, conn)
         if account is not None:
@@ -64,10 +74,16 @@ class PgAccountRepository(AccountRepository):
         await self.create(new_account, conn)
         return new_account
 
-    async def get_by_account_type(self, type, conn):
+    async def get_by_account_type(
+        self,
+        type: AccountTypes,
+        conn: Connection,
+        currency: str = "TOKEN",
+    ) -> Account | None:
         row = await conn.fetchrow(
-            f"SELECT {_SELECT_COLS} FROM accounts WHERE owner_type = $1 LIMIT 1",
+            f"SELECT {_SELECT_COLS} FROM accounts WHERE owner_type = $1 AND currency = $2 LIMIT 1",
             type,
+            currency,
         )
         return self._to_entity(row) if row else None
 

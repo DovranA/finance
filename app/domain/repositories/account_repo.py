@@ -20,13 +20,17 @@ class AccountRepository(ABC):
     ) -> Account | None: ...
     @abstractmethod
     async def get_by_account_type(
-        self, type: AccountTypes, conn: Connection
+        self, type: AccountTypes, conn: Connection, currency: str = "TOKEN"
     ) -> Account | None: ...
 
     @abstractmethod
     async def get_by_owner_id(
         self, user_id: uuid.UUID, conn: Connection
     ) -> Account | None: ...
+    @abstractmethod
+    async def list_by_owner_id(
+        self, user_id: uuid.UUID, conn: Connection
+    ) -> list[Account]: ...
     @abstractmethod
     async def get_by_owner_id_for_update(
         self, user_id: uuid.UUID, conn: Connection
@@ -41,7 +45,7 @@ class AccountRepository(ABC):
 
     @abstractmethod
     async def get_or_create_by_owner_id(
-        self, user_id: uuid.UUID, conn: Connection, currency: str = "TMT"
+        self, user_id: uuid.UUID, conn: Connection, currency: str = "TOKEN"
     ) -> Account: ...
 
     @abstractmethod
