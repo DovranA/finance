@@ -81,5 +81,17 @@ class AdminStreaksResponse(BaseModel):
     streaks: list[AdminStreakPoint]
 
 
+class AdminTopByAmountPoint(BaseModel):
+    user_id: UUID
+    total_amount: int
+
+
+class AdminTopByAmountResponse(BaseModel):
+    limit: int
+    direction: str
+    cached: bool
+    items: list[AdminTopByAmountPoint]
+
+
 class PeriodQuery(BaseModel):
     period: str = Field(default="30d", pattern=r"^\d+d$")

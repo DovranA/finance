@@ -246,3 +246,28 @@ class PgStatisticsRepository(StatisticsRepository):
             direction,
         )
         return [dict(r) for r in rows]
+
+    async def get_admin_top_by_amount(
+        self,
+        limit: int,
+        direction: int | None,
+        conn: Connection,
+    ) -> list[dict[str, Any]]:
+        rows = await conn.fetch(
+            """
+            SELECT
+                a.user_id,
+                                COALESCE(SUM(le.amount), 0)::BIGINT AS total_amount
+            FROM ledger_entries le
+            JOIN accounts a ON a.id = le.account_id
+            WHERE a.owner_type = 'user'
+              AND a.user_id IS NOT NULL
+                            AND ($2::SMALLINT IS NULL OR le.direction = $2)
+            GROUP BY a.user_id
+                        ORDER BY total_amount DESC, a.user_id ASC
+                        LIMIT $1
+            """,
+            limit,
+            direction,
+        )
+        return [dict(r) for r in rows]

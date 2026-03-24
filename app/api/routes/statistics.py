@@ -7,6 +7,7 @@ from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, Header, HTTPException, Query
 
 from app.api.schemas.statistics import (
+    AdminTopByAmountResponse,
     AdminStreaksResponse,
     AdminSystemSummaryResponse,
     ClientStatsByCategoryResponse,
@@ -132,3 +133,21 @@ async def admin_streaks(
     _ensure_admin_role(x_role)
     result = await uc.get_streaks(period=period, limit=limit, direction=direction)
     return AdminStreaksResponse(**result)
+
+
+@admin_router.get(
+    "/top-by-amount",
+    response_model=AdminTopByAmountResponse,
+)
+async def admin_top_by_amount(
+    uc: FromDishka[AdminStatisticsUseCase],
+    limit: int = Query(20, ge=1, le=100),
+    direction: Literal["credit", "debit"] | None = Query(None),
+    x_role: str | None = Header(None, alias="x-role"),
+) -> AdminTopByAmountResponse:
+    _ensure_admin_role(x_role)
+    result = await uc.get_top_by_amount(
+        limit=limit,
+        direction=direction,
+    )
+    return AdminTopByAmountResponse(**result)

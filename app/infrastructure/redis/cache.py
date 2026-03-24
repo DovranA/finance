@@ -17,6 +17,7 @@ ECONOMIC_CONFIG_TTL = 300  # 5 minutes
 IDEMPOTENCY_TTL = 3600  # 1 hour
 BALANCE_CACHE_TTL = 60  # 1 minute
 RULE_ACTION_STAGING_TTL = 7200  # 2 hours
+TOP_BY_AMOUNT_CACHE_TTL = 300  # 5 minutes
 
 
 class CacheService:
@@ -70,6 +71,30 @@ class CacheService:
         else:
             async for key in self._redis.scan_iter(match="rules:*"):
                 await self._redis.delete(key)
+
+    # ── Statistics Cache ────────────────────────────────
+
+    async def get_cached_top_by_amount(
+        self,
+        limit: int,
+        direction: int | None,
+    ) -> list[dict[str, Any]] | None:
+        direction_key = "all" if direction is None else str(direction)
+        key = f"stats:top_by_amount:all_time:{limit}:{direction_key}"
+        data = await self._redis.get(key)
+        if data is None:
+            return None
+        return orjson.loads(data)
+
+    async def set_cached_top_by_amount(
+        self,
+        limit: int,
+        direction: int | None,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        direction_key = "all" if direction is None else str(direction)
+        key = f"stats:top_by_amount:all_time:{limit}:{direction_key}"
+        await self._redis.set(key, orjson.dumps(rows), ex=TOP_BY_AMOUNT_CACHE_TTL)
 
     # ── One-Time-Per-Event Cache (1 day) ──────────────────
 

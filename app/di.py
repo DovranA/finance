@@ -35,6 +35,7 @@ from app.infrastructure.db.repositories.statistics_repo_impl import (
 )
 from app.infrastructure.redis.cache import CacheService
 from app.infrastructure.redis.client import create_redis_pool, close_redis
+from app.infrastructure.rest.client import AsyncRestApiClient
 from app.usecases.get_balance import GetBalanceUseCase
 from app.usecases.set_balance import SetBalanceUseCase
 from app.usecases.transfer import TransferUseCase
@@ -90,6 +91,20 @@ class InfrastructureProvider(Provider):
     @provide
     def get_cache(self, client: redis.Redis | None) -> CacheService | None:
         return CacheService(client) if client else None
+
+    @provide
+    async def get_rest_api_client(
+        self,
+        settings: Settings,
+    ) -> AsyncIterable[AsyncRestApiClient]:
+        client = AsyncRestApiClient(
+            base_url=settings.rest_api.base_url,
+            timeout_seconds=settings.rest_api.timeout_seconds,
+            max_connections=settings.rest_api.max_connections,
+            max_keepalive_connections=settings.rest_api.max_keepalive_connections,
+        )
+        yield client
+        await client.aclose()
 
 
 class RepositoryProvider(Provider):
@@ -269,10 +284,12 @@ class UseCaseProvider(Provider):
         self,
         pool: Pool,
         stats_repo: StatisticsRepository,
+        cache: CacheService | None,
     ) -> AdminStatisticsUseCase:
         return AdminStatisticsUseCase(
             pool=pool,
             stats_repo=stats_repo,
+            cache=cache,
         )
 
 

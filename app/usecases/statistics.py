@@ -9,8 +9,12 @@ from typing import Literal
 from asyncpg import Pool
 import orjson
 
+from app.core.logging import get_logger
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.statistics_repo import StatisticsRepository
+from app.infrastructure.redis.cache import CacheService
+
+logger = get_logger(__name__)
 
 _PERIOD_RE = re.compile(r"^(\d+)d$")
 
@@ -201,9 +205,15 @@ class ClientStatisticsUseCase:
 
 
 class AdminStatisticsUseCase:
-    def __init__(self, pool: Pool, stats_repo: StatisticsRepository) -> None:
+    def __init__(
+        self,
+        pool: Pool,
+        stats_repo: StatisticsRepository,
+        cache: CacheService | None = None,
+    ) -> None:
         self._pool = pool
         self._stats_repo = stats_repo
+        self._cache = cache
 
     async def get_system_summary(
         self,
@@ -258,4 +268,62 @@ class AdminStatisticsUseCase:
             "period_days": period_days,
             "limit": limit,
             "streaks": streaks,
+        }
+
+    async def get_top_by_amount(
+        self,
+        *,
+        limit: int,
+        direction: Literal["credit", "debit"] | None = None,
+    ) -> dict:
+        direction_value = parse_direction(direction)
+
+        if limit <= 0 or limit > 100:
+            raise ValueError("limit must be between 1 and 100")
+
+        if self._cache:
+            cached = await self._cache.get_cached_top_by_amount(
+                limit=limit,
+                direction=direction_value,
+            )
+            if cached is not None:
+                logger.debug(
+                    "admin_top_by_amount_cache_hit",
+                    limit=limit,
+                    direction=direction,
+                )
+                return {
+                    "limit": limit,
+                    "direction": direction or "all",
+                    "cached": True,
+                    "items": cached,
+                }
+
+        async with self._pool.acquire() as conn:
+            rows = await self._stats_repo.get_admin_top_by_amount(
+                limit,
+                direction_value,
+                conn,
+            )
+
+        normalized_rows = [
+            {
+                "user_id": str(row.get("user_id")),
+                "total_amount": int(row.get("total_amount") or 0),
+            }
+            for row in rows
+        ]
+
+        if self._cache:
+            await self._cache.set_cached_top_by_amount(
+                limit=limit,
+                direction=direction_value,
+                rows=normalized_rows,
+            )
+
+        return {
+            "limit": limit,
+            "direction": direction or "all",
+            "cached": False,
+            "items": normalized_rows,
         }

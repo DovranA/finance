@@ -64,3 +64,11 @@ class StatisticsRepository(ABC):
         direction: int | None,
         conn: Connection,
     ) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def get_admin_top_by_amount(
+        self,
+        limit: int,
+        direction: int | None,
+        conn: Connection,
+    ) -> list[dict[str, Any]]: ...

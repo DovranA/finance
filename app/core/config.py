@@ -91,6 +91,15 @@ class OutboxSettings(BaseSettings):
     cleanup_interval: int = 3600  # seconds between cleanup runs
 
 
+class RestApiSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="REST_API_")
+
+    base_url: str = ""
+    timeout_seconds: float = 10.0
+    max_connections: int = 100
+    max_keepalive_connections: int = 20
+
+
 class Settings:
     """Aggregated application settings."""
 
@@ -101,6 +110,7 @@ class Settings:
         self.app = AppSettings()
         self.batch = BatchSettings()
         self.outbox = OutboxSettings()
+        self.rest_api = RestApiSettings()
 
 
 @lru_cache(maxsize=1)
