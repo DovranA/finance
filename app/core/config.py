@@ -100,6 +100,15 @@ class RestApiSettings(BaseSettings):
     max_keepalive_connections: int = 20
 
 
+class UserManagementSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="USER_MANAGEMENT_")
+
+    endpoint: str = ""
+    api_key: str = ""
+    users_lookup_path: str = "/api/v0/users/lookup"
+    timeout_seconds: float = 10.0
+
+
 class Settings:
     """Aggregated application settings."""
 
@@ -111,6 +120,7 @@ class Settings:
         self.batch = BatchSettings()
         self.outbox = OutboxSettings()
         self.rest_api = RestApiSettings()
+        self.user_management = UserManagementSettings()
 
 
 @lru_cache(maxsize=1)

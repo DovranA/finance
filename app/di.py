@@ -15,6 +15,7 @@ from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
 from app.domain.repositories.rule_repo import RuleRepository
 from app.domain.repositories.statistics_repo import StatisticsRepository
+from app.domain.repositories.user_gateway import UserGateway
 from app.domain.policies.engine import ConditionEngine
 from app.domain.policies.registry import ValidatorRegistry, registry as global_registry
 from app.domain.policies.validators.min_balance import MinBalanceValidator
@@ -36,6 +37,7 @@ from app.infrastructure.db.repositories.statistics_repo_impl import (
 from app.infrastructure.redis.cache import CacheService
 from app.infrastructure.redis.client import create_redis_pool, close_redis
 from app.infrastructure.rest.client import AsyncRestApiClient
+from app.infrastructure.rest.user_gateway import RestUserGateway
 from app.usecases.get_balance import GetBalanceUseCase
 from app.usecases.set_balance import SetBalanceUseCase
 from app.usecases.transfer import TransferUseCase
@@ -105,6 +107,17 @@ class InfrastructureProvider(Provider):
         )
         yield client
         await client.aclose()
+
+    @provide
+    def get_user_gateway(
+        self,
+        rest_api_client: AsyncRestApiClient,
+        settings: Settings,
+    ) -> UserGateway:
+        return RestUserGateway(
+            client=rest_api_client,
+            settings=settings.user_management,
+        )
 
 
 class RepositoryProvider(Provider):
@@ -242,6 +255,7 @@ class UseCaseProvider(Provider):
         account_repo: AccountRepository,
         transaction_repo: TransactionRepository,
         ledger_repo: LedgerRepository,
+        user_gateway: UserGateway,
         condition_engine: ConditionEngine,
         cache: CacheService | None,
     ) -> ApplyRuleUseCase:
@@ -251,6 +265,7 @@ class UseCaseProvider(Provider):
             account_repo=account_repo,
             transaction_repo=transaction_repo,
             ledger_repo=ledger_repo,
+            user_gateway=user_gateway,
             condition_engine=condition_engine,
             cache=cache,
         )

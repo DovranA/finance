@@ -25,9 +25,11 @@ from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
 from app.domain.repositories.rule_repo import RuleRepository
 from app.domain.repositories.transfer_repo import TransactionRepository
+from app.domain.repositories.user_gateway import UserGateway
 from app.domain.value_objects.enums import AccountTypes, LedgerDirection
 from app.infrastructure.db.transaction import transaction
 from app.infrastructure.redis.cache import CacheService
+from app.infrastructure.rest.client import RestApiError
 
 logger = get_logger(__name__)
 
@@ -55,6 +57,7 @@ class ApplyRuleUseCase:
         account_repo: AccountRepository,
         transaction_repo: TransactionRepository,
         ledger_repo: LedgerRepository,
+        user_gateway: UserGateway,
         condition_engine: ConditionEngine,
         cache: CacheService | None = None,
     ) -> None:
@@ -63,6 +66,7 @@ class ApplyRuleUseCase:
         self._account_repo = account_repo
         self._transaction_repo = transaction_repo
         self._ledger_repo = ledger_repo
+        self._user_gateway = user_gateway
         self._condition_engine = condition_engine
         self._cache = cache
 
@@ -83,6 +87,13 @@ class ApplyRuleUseCase:
                 if not rule:
                     logger.info("no_active_rules", event_code=event_code)
                     return None
+
+                if self._should_lookup_role(rule, metadata):
+                    await self._inject_user_role(
+                        current_user_id=user_id,
+                        target_user_id=user_id,
+                        metadata=metadata,
+                    )
 
                 account = await self._get_or_create_account_for_update(user_id, conn)
                 account.ensure_active()
@@ -180,6 +191,17 @@ class ApplyRuleUseCase:
 
                 try:
                     targets = self._resolve_target_users(rule, item)
+
+                    if self._should_lookup_role(rule, metadata):
+                        source_user_id_uuid = self._parse_uuid(source_user_id)
+                        if source_user_id_uuid is None:
+                            source_user_id_uuid = targets[0][1]
+                        await self._inject_user_roles_batch(
+                            current_user_id=source_user_id_uuid,
+                            target_user_ids=[target_id for _, target_id in targets],
+                            metadata=metadata,
+                        )
+
                     any_applied = False
                     first_applied_rule: dict[str, Any] | None = None
                     errors: list[str] = []
@@ -594,6 +616,66 @@ class ApplyRuleUseCase:
         if account is None:
             raise AccountNotFound(f"Account {user_id} not found")
         return account
+
+    @staticmethod
+    def _should_lookup_role(rule: Rule, metadata: dict[str, Any]) -> bool:
+        return bool(rule.conditions.get("role_required")) and not metadata.get("role")
+
+    @staticmethod
+    def _parse_uuid(value: Any) -> uuid.UUID | None:
+        try:
+            return uuid.UUID(str(value))
+        except (ValueError, TypeError):
+            return None
+
+    async def _inject_user_role(
+        self,
+        *,
+        current_user_id: uuid.UUID,
+        target_user_id: uuid.UUID,
+        metadata: dict[str, Any],
+    ) -> None:
+        try:
+            users = await self._user_gateway.list_users_by_ids(
+                current_user_id=current_user_id,
+                user_ids=[target_user_id],
+            )
+        except RestApiError as exc:
+            raise DomainError(f"user service lookup failed: {exc}") from exc
+
+        for user in users:
+            if user.id == target_user_id and user.role:
+                metadata["role"] = user.role
+                return
+
+    async def _inject_user_roles_batch(
+        self,
+        *,
+        current_user_id: uuid.UUID,
+        target_user_ids: list[uuid.UUID],
+        metadata: dict[str, Any],
+    ) -> None:
+        if metadata.get("role"):
+            return
+
+        deduped_ids = list(dict.fromkeys(target_user_ids))
+        if not deduped_ids:
+            return
+
+        try:
+            users = await self._user_gateway.list_users_by_ids(
+                current_user_id=current_user_id,
+                user_ids=deduped_ids,
+            )
+        except RestApiError as exc:
+            raise DomainError(f"user service lookup failed: {exc}") from exc
+
+        role_by_user = {user.id: user.role for user in users if user.role}
+        for user_id in target_user_ids:
+            role = role_by_user.get(user_id)
+            if role:
+                metadata["role"] = role
+                return
 
     # ── Transaction creation ─────────────────────────────
 
