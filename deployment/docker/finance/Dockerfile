@@ -1,5 +1,5 @@
 # ── Build Stage ───────────────────────────────────────────────
-FROM ontainer.tmbiz.info/hub/python:3.14-slim AS builder
+FROM container.tmbiz.info/hub/python:3.14-slim AS builder
 
 WORKDIR /build
 
@@ -8,7 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ── Runtime Stage ────────────────────────────────────────────
-FROM ontainer.tmbiz.info/hub/python:3.14-slim
+FROM container.tmbiz.info/hub/python:3.14-slim
 
 # Security: run as non-root
 RUN groupadd -r appuser && useradd -r -g appuser appuser
