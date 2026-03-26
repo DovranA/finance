@@ -1,0 +1,121 @@
+---
+- name: Fetch Finance secrets and deploy Finance  to Production
+  hosts: finance
+  gather_facts: no
+
+  vars:
+    vault_url: "https://vault.tmbiz.info"
+    vault_path: "tmbiz-info/finance/app"
+    inbox_worker: "tmbiz-info/finance/inbox-worker"
+    batch_worker: "tmbiz-info/finance/batch-worker"
+    vault_engine: "production"
+    docker_image: "{{ docker_image }}" 
+
+  tasks:
+    - name: Fetch finance Management  secrets from Vault
+      set_fact:
+        finance_vault_secrets: >-
+          {{ lookup(
+               'community.hashi_vault.vault_kv2_get',
+               vault_path,
+               engine_mount_point=vault_engine,
+               auth_method='token',
+               token=vault_token,
+               url=vault_url
+          ) }}
+
+    - name: Fetch Inbox Worker secrets from Vault
+      set_fact:
+        inbox_worker_vault_secrets: >-
+          {{ lookup(
+               'community.hashi_vault.vault_kv2_get',
+               inbox_worker,
+               engine_mount_point=vault_engine,
+               auth_method='token',
+               token=vault_token,
+               url=vault_url
+          ) }}
+
+    - name: Fetch Batch Worker secrets from Vault
+      set_fact:
+        batch_worker_vault_secrets: >-
+          {{ lookup(
+               'community.hashi_vault.vault_kv2_get',
+               batch_worker,
+               engine_mount_point=vault_engine,
+               auth_method='token',
+               token=vault_token,
+               url=vault_url
+          ) }}
+
+    - name: Convert Vault Secrets to Environment Variables
+      set_fact:
+        finance_master_env: >-
+          {{ dict(
+               finance_vault_secrets.data.data.keys()
+               | zip(finance_vault_secrets.data.data.values() | map('string'))
+          ) }}
+
+    - name: Convert Inbox Worker Vault Secrets to Environment Variables
+      set_fact:
+        inbox_worker_master_env: >-
+          {{ dict(
+               inbox_worker_vault_secrets.data.data.keys()
+               | zip(inbox_worker_vault_secrets.data.data.values() | map('string'))
+          ) }}
+
+    - name: Convert Batch Worker Vault Secrets to Environment Variables
+      set_fact:
+        batch_worker_master_env: >-
+          {{ dict(
+               batch_worker_vault_secrets.data.data.keys()
+               | zip(batch_worker_vault_secrets.data.data.values() | map('string'))
+          ) }}
+
+
+
+    - name: Run Finance-Api  in Docker container
+      become: yes
+      docker_container:
+        name: "finance-api"
+        image: "{{ docker_image }}" 
+        pull: yes
+        state: started
+        restart_policy: always
+        recreate: no
+        network_mode: host
+        env: "{{ finance_master_env }}"
+
+    - name: Run Finance-inbox-worker in Docker container
+      become: yes
+      docker_container:
+        name: "finance-inbox-worker"
+        image: "{{ docker_image }}" 
+        pull: yes
+        state: started
+        restart_policy: always
+        recreate: no
+        network_mode: host
+        env: "{{ inbox_worker_master_env }}"
+        command: 
+          - python
+          - -m
+          - app.infrastructure.rabbitmq.inbox_consumer
+
+    - name: Run Finance-batch-worker in Docker container
+      become: yes
+      docker_container:
+        name: "finance-batch-worker"
+        image: "{{ docker_image }}" 
+        pull: yes
+        state: started
+        restart_policy: always
+        recreate: no
+        network_mode: host
+        env: "{{ batch_worker_master_env }}"
+        command: 
+          - python
+          - -m
+          - app.infrastructure.rabbitmq.batch_worker
+          - --env-file
+          - /dev/nullасда

@@ -1,0 +1,17 @@
+variables:
+  PROD_DOMAIN: "finance.tmbiz.info"
+  CHART_NAME: "tmbiz.application"
+  CHART_VERSION: "1.0.0"
+
+include:
+  - project: "infrastructure/ci-cd-templates"
+    ref: "1.0"
+    file: '/templates/application/init.yml'
+
+build_finance:
+  extends:
+    - .build
+  variables:
+    CONTEXT_PATH: $CI_PROJECT_DIR
+    DOCKERFILE_PATH: $CI_PROJECT_DIR/deployment/docker/finance/
+    OUTPUT_TAG: $CI_REGISTRY/applications/$CI_PROJECT_NAME:$CI_COMMIT_SHORT_SHA

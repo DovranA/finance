@@ -165,13 +165,11 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
       APP_ENV: ${APP_ENV:-production}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
-      APP_NAME: finance-batch-worker
+      APP_NAME: finance-inbox-worker
       APP_ENABLE_METRICS: "true"
-      APP_METRICS_PORT: 8002
-      POSTGRES_POOL_MIN: ${BATCH_POSTGRES_POOL_MIN:-1}
-      POSTGRES_POOL_MAX: ${BATCH_POSTGRES_POOL_MAX:-10}
-      BATCH_SIZE: ${BATCH_SIZE:-500}
-      BATCH_INTERVAL_SECONDS: ${BATCH_INTERVAL_SECONDS:-5}
+      APP_METRICS_PORT: 8001
+      POSTGRES_POOL_MIN: ${INBOX_POSTGRES_POOL_MIN:-1}
+      POSTGRES_POOL_MAX: ${INBOX_POSTGRES_POOL_MAX:-10}
     depends_on:
       postgres:
         condition: service_healthy

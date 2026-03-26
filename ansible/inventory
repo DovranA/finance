@@ -1,0 +1,5 @@
+[finance]
+finance ansible_host=172.16.10.65 ansible_user=ubuntu
+
+[finance-stage]
+finance-stage ansible_host=192.168.1.6 ansible_user=ubuntu
