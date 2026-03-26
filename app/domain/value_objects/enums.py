@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import IntEnum, StrEnum
+from enum import Enum
 
 
-class Currency(StrEnum):
+class Currency(str, Enum):
     USD = "USD"
     EUR = "EUR"
     RUB = "RUB"
@@ -14,13 +14,13 @@ class Currency(StrEnum):
     DIAMOND = "DIAMOND"
 
 
-class TransactionStatus(StrEnum):
+class TransactionStatus(str, Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
-class EntryType(StrEnum):
+class EntryType(str, Enum):
     ACTOR_REWARD = "actor_reward"
     PUBLISHER_REWARD = "publisher_reward"
     PLATFORM_FEE = "platform_fee"
@@ -28,17 +28,17 @@ class EntryType(StrEnum):
     MANUAL_ADJUSTMENT = "manual_adjustment"
 
 
-class BatchStatus(StrEnum):
+class BatchStatus(str, Enum):
     PENDING = "pending"
     PROCESSED = "processed"
 
 
-class AccountTypes(StrEnum):
+class AccountTypes(str, Enum):
     USER = "user"
     TREASURY = "treasury"
     REWARD_POOL = "reward_pool"
 
 
-class LedgerDirection(IntEnum):
+class LedgerDirection(int, Enum):
     DIRECTION_DEBIT = -1
     DIRECTION_CREDIT = 1

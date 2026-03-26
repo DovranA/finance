@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class PostgresSettings(BaseSettings):
@@ -17,6 +21,21 @@ class PostgresSettings(BaseSettings):
     password: str = "finance_secret"
     pool_min: int = 10
     pool_max: int = 50
+
+    def model_post_init(self, __context):
+        """Log loaded values for debugging."""
+        logger.info(
+            f"PostgresSettings loaded: host={self.host}, port={self.port}, "
+            f"db={self.db}, user={self.user}, pool_min={self.pool_min}, "
+            f"pool_max={self.pool_max}"
+        )
+        # Also log raw env vars to debug
+        postgres_host_env = os.getenv("POSTGRES_HOST")
+        postgres_port_env = os.getenv("POSTGRES_PORT")
+        logger.info(
+            f"Raw env vars: POSTGRES_HOST={postgres_host_env}, "
+            f"POSTGRES_PORT={postgres_port_env}"
+        )
 
     @property
     def dsn(self) -> str:
