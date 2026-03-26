@@ -148,7 +148,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: finance-batch-worker
-    command: ["python", "-m", "app.infrastructure.rabbitmq.batch_worker", "--env-file", "/dev/null"]
+    command: ["python", "-m", "app.infrastructure.rabbitmq.batch_worker"]
     networks:
       - finance-network
     environment:

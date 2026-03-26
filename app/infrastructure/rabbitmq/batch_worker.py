@@ -12,7 +12,7 @@ from pathlib import Path
 from prometheus_client import start_http_server
 
 from app.core.config import get_settings
-from app.core.logging import get_logger
+from app.core.logging import setup_logging, get_logger
 from app.core.metrics import AppMetrics, register_metrics
 from app.di import create_container
 from asyncpg import Pool
@@ -162,6 +162,12 @@ class RuleBatchWorker:
 
 
 async def run_worker() -> None:
+    # Setup logging first with default level, then load settings
+    setup_logging("INFO")
+    settings = get_settings()
+    # Update logging level based on settings
+    setup_logging(settings.app.log_level)
+
     worker = RuleBatchWorker()
 
     if worker._settings.app.enable_metrics and worker._settings.app.metrics_port:
@@ -181,7 +187,8 @@ def _load_env_file(path: str) -> None:
         env_path = Path.cwd() / env_path
 
     if not env_path.exists():
-        raise FileNotFoundError(f"Environment file not found: {env_path}")
+        logger.debug(f"Environment file not found at {env_path}, using container env")
+        return
 
     for line in env_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -201,13 +208,14 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--env-file",
-        default=".env.dev",
-        help="Path to env file to load before starting worker",
+        default="",
+        help="Optional path to env file to load before starting worker",
     )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    _load_env_file(args.env_file)
+    if args.env_file:
+        _load_env_file(args.env_file)
     asyncio.run(run_worker())
