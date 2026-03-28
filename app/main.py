@@ -24,10 +24,13 @@ from app.infrastructure.rabbitmq.inbox_consumer import run_consumer
 from app.domain.exceptions import (
     AccountInactive,
     AccountNotFound,
+    AuthError,
     CurrencyMismatch,
     DomainError,
     DuplicateOperation,
     InsufficientFunds,
+    JwtConfigurationError,
+    JwtValidationError,
     RuleAlreadyExists,
 )
 from app.usecases.rule_crud import RuleNotFound
@@ -116,7 +119,7 @@ def create_app() -> FastAPI:
     setup_dishka(container, app)
     app.state.container = container
     # ── Register routers ─────────────────────────────────
-    app.include_router(router_v0, prefix="/api")
+    app.include_router(router_v0, prefix="/finance/api")
 
     # ── Exception handlers ───────────────────────────────
     @app.exception_handler(AccountNotFound)
@@ -150,6 +153,25 @@ def create_app() -> FastAPI:
     @app.exception_handler(DomainError)
     async def domain_error_handler(request: Request, exc: DomainError):
         return JSONResponse(status_code=400, content={"error": str(exc)})
+
+    @app.exception_handler(JwtValidationError)
+    async def jwt_validation_error_handler(request: Request, exc: JwtValidationError):
+        return JSONResponse(
+            status_code=401,
+            content={"error": str(exc)},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    @app.exception_handler(JwtConfigurationError)
+    async def jwt_configuration_error_handler(
+        request: Request,
+        exc: JwtConfigurationError,
+    ):
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+    @app.exception_handler(AuthError)
+    async def auth_error_handler(request: Request, exc: AuthError):
+        return JSONResponse(status_code=401, content={"error": str(exc)})
 
     # ── Health endpoint ──────────────────────────────────
     @app.get("/health", response_model=HealthResponse, tags=["Health"])
