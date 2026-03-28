@@ -1,10 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.api.v0.auth import require_jwt_bearer
 from app.api.v0.routes import accounts, rule, statistics
 
 PREFIX = "/v0"
 
 
-router = APIRouter(prefix=PREFIX)
+router = APIRouter(prefix=PREFIX, dependencies=[Depends(require_jwt_bearer)])
 
 router.include_router(accounts.router)
 router.include_router(rule.router)

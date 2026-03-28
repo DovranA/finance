@@ -128,6 +128,15 @@ class UserManagementSettings(BaseSettings):
     timeout_seconds: float = 10.0
 
 
+class JwtSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="JWT_")
+
+    enabled: bool = True
+    algorithm: str = "HS256"
+    secret_key: str = ""
+    leeway_seconds: int = 0
+
+
 class Settings:
     """Aggregated application settings."""
 
@@ -140,6 +149,7 @@ class Settings:
         self.outbox = OutboxSettings()
         self.rest_api = RestApiSettings()
         self.user_management = UserManagementSettings()
+        self.jwt = JwtSettings()
 
 
 @lru_cache(maxsize=1)

@@ -27,3 +27,15 @@ class CurrencyMismatch(DomainError):
 
 class RuleAlreadyExists(DomainError):
     """Raised when a rule with the same event_code already exists."""
+
+
+class AuthError(Exception):
+    """Base class for authentication-related errors."""
+
+
+class JwtValidationError(AuthError):
+    """Raised when JWT bearer token validation fails."""
+
+
+class JwtConfigurationError(AuthError):
+    """Raised when JWT auth is enabled but configuration is invalid."""
