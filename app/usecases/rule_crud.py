@@ -66,7 +66,7 @@ class GetRuleUseCase:
         self._rule_repo = rule_repo
 
     async def execute(self, *, rule_id: uuid.UUID) -> Rule:
-        async with transaction(self._pool) as conn:
+        async with self._pool.acquire() as conn:
             rule = await self._rule_repo.get_by_id(rule_id, conn)
         if rule is None:
             raise RuleNotFound(f"Rule {rule_id} not found")
@@ -82,10 +82,22 @@ class ListRulesUseCase:
         self,
         *,
         limit: int = 50,
-        offset: int = 0,
+        page: int = 1,
     ) -> list[Rule]:
         async with transaction(self._pool) as conn:
-            return await self._rule_repo.list_all(conn, limit=limit, offset=offset)
+            offset = max(page - 1, 0) * limit
+            result = await self._rule_repo.list_all(conn, limit=limit, offset=offset)
+            total_count = await self._rule_repo.count(conn)
+            total_pages = (total_count + limit - 1) // limit
+            page_info = {
+                "has_next_page": page < total_pages,
+                "has_previous_page": page > 1,
+                "total_pages": total_pages,
+                "page": page,
+                "limit": limit,
+            }
+
+            return {"data": result if result else [], "page_info": page_info}
 
 
 class UpdateRuleUseCase:

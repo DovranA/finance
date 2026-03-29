@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.api.v0.schemas.general import PaginatedResponse
+
 
 class ClientStatsSummaryResponse(BaseModel):
     user_id: UUID
@@ -33,6 +35,12 @@ class ClientStatsTimelineResponse(BaseModel):
     points: list[ClientTimelinePoint]
 
 
+class ClientStatsTimelinePaginatedResponse(
+    PaginatedResponse[list[ClientTimelinePoint]]
+):
+    pass
+
+
 class ClientCategoryPoint(BaseModel):
     event_code: str | None = None
     description_i18n: dict[str, str] | None = None
@@ -48,6 +56,12 @@ class ClientStatsByCategoryResponse(BaseModel):
     categories: list[ClientCategoryPoint]
 
 
+class ClientStatsByCategoryPaginatedResponse(
+    PaginatedResponse[list[ClientCategoryPoint]]
+):
+    pass
+
+
 class ClientStatsStreaksResponse(BaseModel):
     user_id: UUID
     period_days: int
@@ -57,8 +71,15 @@ class ClientStatsStreaksResponse(BaseModel):
     last_active_day: date | None = None
 
 
+class ClientStatsStreaksPaginatedResponse(
+    PaginatedResponse[list[ClientStatsStreaksResponse]]
+):
+    pass
+
+
 class AdminSystemSummaryResponse(BaseModel):
-    period_days: int
+    start_from: date
+    end_to: date
     total_users_with_accounts: int
     total_balance_in_system: int
     avg_user_balance: int
@@ -81,6 +102,10 @@ class AdminStreaksResponse(BaseModel):
     streaks: list[AdminStreakPoint]
 
 
+class AdminStreaksPaginatedResponse(PaginatedResponse[list[AdminStreakPoint]]):
+    pass
+
+
 class AdminTopByAmountPoint(BaseModel):
     user_id: UUID
     total_amount: int
@@ -91,6 +116,11 @@ class AdminTopByAmountResponse(BaseModel):
     direction: str
     cached: bool
     items: list[AdminTopByAmountPoint]
+
+
+class AdminTopByAmountPaginatedResponse(PaginatedResponse[list[AdminTopByAmountPoint]]):
+    direction: str
+    cached: bool
 
 
 class PeriodQuery(BaseModel):

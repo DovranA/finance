@@ -83,27 +83,9 @@ async def get_rule(
 async def list_rules(
     uc: FromDishka[ListRulesUseCase],
     limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
 ) -> RuleListResponse:
-    rules = await uc.execute(limit=limit, offset=offset)
-    return RuleListResponse(
-        rules=[
-            RuleResponse(
-                id=r.id,
-                event_code=r.event_code,
-                description_i18n=r.description_i18n,
-                conditions=r.conditions,
-                actions=r.actions,
-                priority=r.priority,
-                is_active=r.is_active,
-                expired_at=r.expired_at,
-                created_at=r.created_at,
-                updated_at=r.updated_at,
-            )
-            for r in rules
-        ],
-        total=len(rules),
-    )
+    return await uc.execute(limit=limit, page=page)
 
 
 @router.patch("/{rule_id}", response_model=RuleResponse)

@@ -86,3 +86,17 @@ async def require_jwt_bearer(
     )
 
     return payload
+
+
+async def get_current_user_id(
+    payload: dict = Depends(require_jwt_bearer),
+) -> UUID:
+    """Return current user id parsed from JWT `sub` claim."""
+    sub = payload.get("sub")
+    if not isinstance(sub, str):
+        raise JwtValidationError("invalid sub claim")
+
+    try:
+        return UUID(sub)
+    except ValueError as exc:
+        raise JwtValidationError("sub must be a valid UUID") from exc

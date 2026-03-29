@@ -1,5 +1,6 @@
 """Statistics endpoints for client and admin."""
 
+from datetime import date
 from uuid import UUID
 from typing import Literal
 
@@ -7,12 +8,15 @@ from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, Header, HTTPException, Query
 
 from app.api.v0.schemas.statistics import (
+    AdminStreaksPaginatedResponse,
     AdminTopByAmountResponse,
-    AdminStreaksResponse,
+    AdminTopByAmountPaginatedResponse,
     AdminSystemSummaryResponse,
+    ClientStatsByCategoryPaginatedResponse,
     ClientStatsByCategoryResponse,
-    ClientStatsStreaksResponse,
+    ClientStatsStreaksPaginatedResponse,
     ClientStatsSummaryResponse,
+    ClientStatsTimelinePaginatedResponse,
     ClientStatsTimelineResponse,
 )
 from app.usecases.statistics import AdminStatisticsUseCase, ClientStatisticsUseCase
@@ -31,11 +35,6 @@ admin_router = APIRouter(
 )
 
 
-def _ensure_admin_role(x_role: str | None) -> None:
-    if (x_role or "").lower() != "admin":
-        raise HTTPException(status_code=403, detail="admin role required")
-
-
 @client_router.get(
     "/{user_id}/statistics/summary",
     response_model=ClientStatsSummaryResponse,
@@ -52,56 +51,68 @@ async def client_summary(
 
 @client_router.get(
     "/{user_id}/statistics/timeline",
-    response_model=ClientStatsTimelineResponse,
+    response_model=ClientStatsTimelinePaginatedResponse,
 )
 async def client_timeline(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
     period: str = Query("30d", pattern=r"^\d+d$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
-) -> ClientStatsTimelineResponse:
+) -> ClientStatsTimelinePaginatedResponse:
     result = await uc.get_timeline(
         user_id=user_id,
         period=period,
+        page=page,
+        limit=limit,
         direction=direction,
     )
-    return ClientStatsTimelineResponse(**result)
+    return ClientStatsTimelinePaginatedResponse(**result)
 
 
 @client_router.get(
     "/{user_id}/statistics/by-category",
-    response_model=ClientStatsByCategoryResponse,
+    response_model=ClientStatsByCategoryPaginatedResponse,
 )
 async def client_by_category(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
     period: str = Query("30d", pattern=r"^\d+d$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
-) -> ClientStatsByCategoryResponse:
+) -> ClientStatsByCategoryPaginatedResponse:
     result = await uc.get_by_category(
         user_id=user_id,
         period=period,
+        page=page,
+        limit=limit,
         direction=direction,
     )
-    return ClientStatsByCategoryResponse(**result)
+    return ClientStatsByCategoryPaginatedResponse(**result)
 
 
 @client_router.get(
     "/{user_id}/statistics/streaks",
-    response_model=ClientStatsStreaksResponse,
+    response_model=ClientStatsStreaksPaginatedResponse,
 )
 async def client_streaks(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
     period: str = Query("30d", pattern=r"^\d+d$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
-) -> ClientStatsStreaksResponse:
+) -> ClientStatsStreaksPaginatedResponse:
     result = await uc.get_streaks(
         user_id=user_id,
         period=period,
+        page=page,
+        limit=limit,
         direction=direction,
     )
-    return ClientStatsStreaksResponse(**result)
+    return ClientStatsStreaksPaginatedResponse(**result)
 
 
 @admin_router.get(
@@ -110,44 +121,58 @@ async def client_streaks(
 )
 async def admin_system_summary(
     uc: FromDishka[AdminStatisticsUseCase],
-    period: str = Query("30d", pattern=r"^\d+d$"),
+    start_from: date = Query(...),
+    end_to: date = Query(...),
     direction: Literal["credit", "debit"] | None = Query(None),
-    x_role: str | None = Header(None, alias="x-role"),
 ) -> AdminSystemSummaryResponse:
-    _ensure_admin_role(x_role)
-    result = await uc.get_system_summary(period=period, direction=direction)
+    result = await uc.get_system_summary(
+        start_from=start_from,
+        end_to=end_to,
+        direction=direction,
+    )
     return AdminSystemSummaryResponse(**result)
 
 
 @admin_router.get(
     "/streaks",
-    response_model=AdminStreaksResponse,
+    response_model=AdminStreaksPaginatedResponse,
 )
 async def admin_streaks(
     uc: FromDishka[AdminStatisticsUseCase],
-    period: str = Query("30d", pattern=r"^\d+d$"),
+    start_from: date = Query(...),
+    end_to: date = Query(...),
+    page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
-    x_role: str | None = Header(None, alias="x-role"),
-) -> AdminStreaksResponse:
-    _ensure_admin_role(x_role)
-    result = await uc.get_streaks(period=period, limit=limit, direction=direction)
-    return AdminStreaksResponse(**result)
+) -> AdminStreaksPaginatedResponse:
+    result = await uc.get_streaks(
+        start_from=start_from,
+        end_to=end_to,
+        page=page,
+        limit=limit,
+        direction=direction,
+    )
+    return AdminStreaksPaginatedResponse(**result)
 
 
 @admin_router.get(
     "/top-by-amount",
-    response_model=AdminTopByAmountResponse,
+    response_model=AdminTopByAmountPaginatedResponse,
 )
 async def admin_top_by_amount(
     uc: FromDishka[AdminStatisticsUseCase],
+    start_from: date = Query(...),
+    end_to: date = Query(...),
+    page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
-    x_role: str | None = Header(None, alias="x-role"),
-) -> AdminTopByAmountResponse:
-    _ensure_admin_role(x_role)
+) -> AdminTopByAmountPaginatedResponse:
+
     result = await uc.get_top_by_amount(
+        start_from=start_from,
+        end_to=end_to,
+        page=page,
         limit=limit,
         direction=direction,
     )
-    return AdminTopByAmountResponse(**result)
+    return AdminTopByAmountPaginatedResponse(**result)
