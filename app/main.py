@@ -119,7 +119,7 @@ def create_app() -> FastAPI:
     setup_dishka(container, app)
     app.state.container = container
     # ── Register routers ─────────────────────────────────
-    app.include_router(router_v0, prefix="/finance/api")
+    app.include_router(router_v0, prefix="/api")
 
     # ── Exception handlers ───────────────────────────────
     @app.exception_handler(AccountNotFound)
