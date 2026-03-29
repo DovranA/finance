@@ -2,7 +2,7 @@
 -- Created: 2026-02-27 12:00:00
 
 CREATE TABLE IF NOT EXISTS transactions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    id UUID PRIMARY KEY,
     idempotency_key VARCHAR(256) NOT NULL UNIQUE,
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (
         status IN (
