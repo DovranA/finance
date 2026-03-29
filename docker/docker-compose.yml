@@ -280,6 +280,7 @@ volumes:
   redisdata:
   rabbitmqdata:
   debeziumdata:
+  redisinsightdata:
   prometheus_storage:
   grafana_storage:
 

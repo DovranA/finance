@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.api.v0.schemas.general import PaginatedResponse
 
 
 class RuleCondition(BaseModel):
@@ -73,9 +75,8 @@ class RuleResponse(BaseModel):
     updated_at: datetime
 
 
-class RuleListResponse(BaseModel):
-    rules: list[RuleResponse]
-    total: int
+class RuleListResponse(PaginatedResponse[List[RuleResponse]]):
+    pass
 
 
 RuleLang = Literal["en", "ru", "tk"]

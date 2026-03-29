@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from datetime import date
 from typing import Any
 
 from asyncpg import Connection
@@ -51,7 +52,8 @@ class StatisticsRepository(ABC):
     @abstractmethod
     async def get_admin_system_summary(
         self,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
     ) -> dict[str, Any]: ...
@@ -59,7 +61,8 @@ class StatisticsRepository(ABC):
     @abstractmethod
     async def get_admin_streaks(
         self,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         limit: int,
         direction: int | None,
         conn: Connection,
@@ -68,6 +71,8 @@ class StatisticsRepository(ABC):
     @abstractmethod
     async def get_admin_top_by_amount(
         self,
+        start_from: date,
+        end_to: date,
         limit: int,
         direction: int | None,
         conn: Connection,

@@ -32,6 +32,9 @@ class RuleRepository(ABC):
     ) -> list[Rule]: ...
 
     @abstractmethod
+    async def count(self, conn: Connection) -> int: ...
+
+    @abstractmethod
     async def create(self, rule: Rule, conn: Connection) -> None: ...
 
     @abstractmethod

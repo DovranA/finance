@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Any
 
 from asyncpg import Connection
@@ -141,7 +142,8 @@ class PgStatisticsRepository(StatisticsRepository):
 
     async def get_admin_system_summary(
         self,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
     ) -> dict[str, Any]:
@@ -163,8 +165,9 @@ class PgStatisticsRepository(StatisticsRepository):
                 FROM ledger_entries le
                 JOIN accounts a ON a.id = le.account_id
                 WHERE a.owner_type = 'user'
-                  AND le.created_at >= NOW() - ($1 * INTERVAL '1 day')
-                                    AND ($2::SMALLINT IS NULL OR le.direction = $2)
+                                    AND le.created_at >= $1::date
+                                    AND le.created_at < ($2::date + INTERVAL '1 day')
+                                    AND ($3::SMALLINT IS NULL OR le.direction = $3)
             )
             SELECT
                 a.total_users_with_accounts,
@@ -179,14 +182,16 @@ class PgStatisticsRepository(StatisticsRepository):
             FROM account_stats a
             CROSS JOIN ledger_stats l
             """,
-            period_days,
+            start_from,
+            end_to,
             direction,
         )
         return dict(row) if row else {}
 
     async def get_admin_streaks(
         self,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         limit: int,
         direction: int | None,
         conn: Connection,
@@ -201,8 +206,9 @@ class PgStatisticsRepository(StatisticsRepository):
                 JOIN accounts a ON a.id = le.account_id
                 WHERE a.owner_type = 'user'
                   AND a.user_id IS NOT NULL
-                  AND le.created_at >= NOW() - ($1 * INTERVAL '1 day')
-                                    AND ($3::SMALLINT IS NULL OR le.direction = $3)
+                                    AND le.created_at >= $1::date
+                                    AND le.created_at < ($2::date + INTERVAL '1 day')
+                                    AND ($4::SMALLINT IS NULL OR le.direction = $4)
                 GROUP BY a.user_id, DATE(le.created_at)
             ),
             grouped AS (
@@ -239,9 +245,10 @@ class PgStatisticsRepository(StatisticsRepository):
                 last_active_day
             FROM agg
             ORDER BY current_streak_days DESC, longest_streak_days DESC, active_days_in_period DESC
-            LIMIT $2
+            LIMIT $3
             """,
-            period_days,
+            start_from,
+            end_to,
             limit,
             direction,
         )
@@ -249,6 +256,8 @@ class PgStatisticsRepository(StatisticsRepository):
 
     async def get_admin_top_by_amount(
         self,
+        start_from: date,
+        end_to: date,
         limit: int,
         direction: int | None,
         conn: Connection,
@@ -262,11 +271,15 @@ class PgStatisticsRepository(StatisticsRepository):
             JOIN accounts a ON a.id = le.account_id
             WHERE a.owner_type = 'user'
               AND a.user_id IS NOT NULL
-                            AND ($2::SMALLINT IS NULL OR le.direction = $2)
+                            AND le.created_at >= $1::date
+                            AND le.created_at < ($2::date + INTERVAL '1 day')
+                            AND ($4::SMALLINT IS NULL OR le.direction = $4)
             GROUP BY a.user_id
                         ORDER BY total_amount DESC, a.user_id ASC
-                        LIMIT $1
+                        LIMIT $3
             """,
+            start_from,
+            end_to,
             limit,
             direction,
         )

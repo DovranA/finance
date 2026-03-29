@@ -57,6 +57,9 @@ class PgRuleRepository(RuleRepository):
         )
         return [self._to_entity(r) for r in rows]
 
+    async def count(self, conn):
+        return await conn.fetchval("SELECT COUNT(*) FROM rules")
+
     async def create(self, rule: Rule, conn: Connection) -> None:
 
         await conn.execute(
