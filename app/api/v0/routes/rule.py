@@ -36,7 +36,6 @@ async def create_rule(
         event_code=data.event_code,
         conditions=data.conditions.model_dump(exclude_none=True),
         actions=data.actions.model_dump(exclude_none=True),
-        description=data.description,
         description_i18n=(
             data.description_i18n.model_dump(exclude_none=True)
             if data.description_i18n

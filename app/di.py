@@ -40,6 +40,7 @@ from app.infrastructure.rest.client import AsyncRestApiClient
 from app.infrastructure.rest.user_gateway import RestUserGateway
 from app.usecases.get_balance import GetBalanceUseCase
 from app.usecases.set_balance import SetBalanceUseCase
+from app.usecases.superadmin import SuperAdminUseCase
 from app.usecases.transfer import TransferUseCase
 from app.usecases.rule_crud import (
     CreateRuleUseCase,
@@ -312,6 +313,14 @@ class UseCaseProvider(Provider):
             user_gateway=user_gateway,
             cache=cache,
         )
+
+    @provide
+    def super_admin_uc(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+    ) -> SuperAdminUseCase:
+        return SuperAdminUseCase(pool=pool, account_repo=account_repo)
 
 
 def create_container() -> AsyncContainer:

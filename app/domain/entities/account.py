@@ -51,11 +51,12 @@ class Account:
         user_id: uuid.UUID | None,
         currency: str = "TOKEN",
         owner_type: str | None = None,
+        balance: int | None = None,
     ) -> Account:
         return cls(
             id=uuid.uuid4(),
             user_id=user_id,
-            balance=0,
+            balance=balance or 0,
             currency=currency,
             owner_type=owner_type,
         )

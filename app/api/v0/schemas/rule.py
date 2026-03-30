@@ -43,7 +43,6 @@ class RuleDescriptionI18n(BaseModel):
 
 class CreateRuleRequest(BaseModel):
     event_code: str = Field(..., min_length=1, max_length=128)
-    description: str | None = None
     description_i18n: RuleDescriptionI18n | None = None
     conditions: RuleCondition = Field(default_factory=dict)
     actions: RuleAction = Field(default_factory=dict)
