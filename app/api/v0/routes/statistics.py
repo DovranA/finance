@@ -1,6 +1,6 @@
 """Statistics endpoints for client and admin."""
 
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 from typing import Literal
 
@@ -9,15 +9,11 @@ from fastapi import APIRouter, Header, HTTPException, Query
 
 from app.api.v0.schemas.statistics import (
     AdminStreaksPaginatedResponse,
-    AdminTopByAmountResponse,
-    AdminTopByAmountPaginatedResponse,
     AdminSystemSummaryResponse,
     ClientStatsByCategoryPaginatedResponse,
-    ClientStatsByCategoryResponse,
     ClientStatsStreaksPaginatedResponse,
     ClientStatsSummaryResponse,
     ClientStatsTimelinePaginatedResponse,
-    ClientStatsTimelineResponse,
 )
 from app.usecases.statistics import AdminStatisticsUseCase, ClientStatisticsUseCase
 
@@ -121,10 +117,14 @@ async def client_streaks(
 )
 async def admin_system_summary(
     uc: FromDishka[AdminStatisticsUseCase],
-    start_from: date = Query(...),
-    end_to: date = Query(...),
+    start_from: date | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    end_to: date | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     direction: Literal["credit", "debit"] | None = Query(None),
 ) -> AdminSystemSummaryResponse:
+    if start_from is None:
+        start_from = date.today() - timedelta(days=30)
+    if end_to is None:
+        end_to = date.today()
     result = await uc.get_system_summary(
         start_from=start_from,
         end_to=end_to,
@@ -139,12 +139,16 @@ async def admin_system_summary(
 )
 async def admin_streaks(
     uc: FromDishka[AdminStatisticsUseCase],
-    start_from: date = Query(...),
-    end_to: date = Query(...),
+    start_from: date | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    end_to: date | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
 ) -> AdminStreaksPaginatedResponse:
+    if start_from is None:
+        start_from = date.today() - timedelta(days=30)
+    if end_to is None:
+        end_to = date.today()
     result = await uc.get_streaks(
         start_from=start_from,
         end_to=end_to,
@@ -157,22 +161,27 @@ async def admin_streaks(
 
 @admin_router.get(
     "/top-by-amount",
-    response_model=AdminTopByAmountPaginatedResponse,
 )
 async def admin_top_by_amount(
     uc: FromDishka[AdminStatisticsUseCase],
-    start_from: date = Query(...),
-    end_to: date = Query(...),
-    page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    direction: Literal["credit", "debit"] | None = Query(None),
-) -> AdminTopByAmountPaginatedResponse:
+):
 
     result = await uc.get_top_by_amount(
-        start_from=start_from,
-        end_to=end_to,
-        page=page,
         limit=limit,
-        direction=direction,
     )
-    return AdminTopByAmountPaginatedResponse(**result)
+    return result
+
+
+@client_router.get(
+    "/top-by-amount",
+)
+async def admin_top_by_amount(
+    uc: FromDishka[ClientStatisticsUseCase],
+    limit: int = Query(20, ge=1, le=100),
+):
+
+    result = await uc.get_top_by_amount(
+        limit=limit,
+    )
+    return result

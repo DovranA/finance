@@ -256,31 +256,25 @@ class PgStatisticsRepository(StatisticsRepository):
 
     async def get_admin_top_by_amount(
         self,
-        start_from: date,
-        end_to: date,
-        limit: int,
-        direction: int | None,
         conn: Connection,
+        limit: int = 10,
+        currency: str = "TOKEN",
     ) -> list[dict[str, Any]]:
         rows = await conn.fetch(
             """
-            SELECT
-                a.user_id,
-                                COALESCE(SUM(le.amount), 0)::BIGINT AS total_amount
-            FROM ledger_entries le
-            JOIN accounts a ON a.id = le.account_id
-            WHERE a.owner_type = 'user'
-              AND a.user_id IS NOT NULL
-                            AND le.created_at >= $1::date
-                            AND le.created_at < ($2::date + INTERVAL '1 day')
-                            AND ($4::SMALLINT IS NULL OR le.direction = $4)
-            GROUP BY a.user_id
-                        ORDER BY total_amount DESC, a.user_id ASC
-                        LIMIT $3
+            SELECT a.user_id, SUM(a.balance) AS total_amount
+FROM accounts a
+    JOIN ledger_entries le ON a.id = le.account_id
+WHERE
+    a.owner_type = 'user'
+    AND a.currency = $1 -- Filter for the specific currency
+    AND a.user_id IS NOT NULL
+GROUP BY
+    a.user_id
+ORDER BY total_amount DESC, a.user_id ASC
+LIMIT $2;
             """,
-            start_from,
-            end_to,
+            currency,
             limit,
-            direction,
         )
         return [dict(r) for r in rows]

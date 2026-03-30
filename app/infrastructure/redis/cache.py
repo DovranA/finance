@@ -77,10 +77,8 @@ class CacheService:
     async def get_cached_top_by_amount(
         self,
         limit: int,
-        direction: int | None,
     ) -> list[dict[str, Any]] | None:
-        direction_key = "all" if direction is None else str(direction)
-        key = f"stats:top_by_amount:all_time:{limit}:{direction_key}"
+        key = f"stats:top_by_amount:all_time:{limit}"
         data = await self._redis.get(key)
         if data is None:
             return None
@@ -89,12 +87,11 @@ class CacheService:
     async def set_cached_top_by_amount(
         self,
         limit: int,
-        direction: int | None,
         rows: list[dict[str, Any]],
     ) -> None:
-        direction_key = "all" if direction is None else str(direction)
-        key = f"stats:top_by_amount:all_time:{limit}:{direction_key}"
+        key = f"stats:top_by_amount:all_time:{limit}"
         await self._redis.set(key, orjson.dumps(rows), ex=TOP_BY_AMOUNT_CACHE_TTL)
+        print("saved")
 
     # ── One-Time-Per-Event Cache (1 day) ──────────────────
 

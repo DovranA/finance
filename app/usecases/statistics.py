@@ -5,15 +5,19 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
 from asyncpg import Pool
 import orjson
 
 from app.core.logging import get_logger
+from app.domain.entities.user import User
+from app.domain.exceptions import DomainError
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.statistics_repo import StatisticsRepository
+from app.domain.repositories.user_gateway import UserGateway
 from app.infrastructure.redis.cache import CacheService
+from app.infrastructure.rest.client import RestApiError
 
 logger = get_logger(__name__)
 
@@ -94,11 +98,41 @@ class ClientStatisticsUseCase:
         self,
         pool: Pool,
         account_repo: AccountRepository,
+        user_gateway: UserGateway,
         stats_repo: StatisticsRepository,
+        cache: CacheService | None = None,
     ) -> None:
         self._pool = pool
-        self._account_repo = account_repo
         self._stats_repo = stats_repo
+        self._account_repo = account_repo
+        self._cache = cache
+        self._user_gateway = user_gateway
+
+    async def _fetch_users_map(
+        self,
+        user_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        """Fetch users and return as a map for quick lookup."""
+        deduped_ids = list(dict.fromkeys(user_ids))
+        if not deduped_ids:
+            return {}
+
+        try:
+            users = await self._user_gateway.list_users_by_ids(
+                current_user_id=None,
+                user_ids=deduped_ids,
+            )
+        except RestApiError as exc:
+            raise DomainError(f"user service lookup failed: {exc}") from exc
+
+        return {
+            user.id: {
+                "username": user.username,
+                "fullname": user.fullname,
+                "role": user.role,
+            }
+            for user in users
+        }
 
     async def get_summary(
         self,
@@ -268,17 +302,79 @@ class ClientStatisticsUseCase:
 
         return _paginate_items(items=items, page=page, limit=limit)
 
+    async def get_top_by_amount(
+        self,
+        *,
+        limit: int,
+        currency: str = "TOKEN",
+    ) -> dict:
+        cached_normalized_rows = await self._cache.get_cached_top_by_amount(limit)
+        if cached_normalized_rows:
+            return {
+                "data": cached_normalized_rows or [],
+                "cached": True,
+            }
+        async with self._pool.acquire() as conn:
+            rows = await self._stats_repo.get_admin_top_by_amount(conn, limit, currency)
+        # Extract user IDs for batch lookup
+        user_ids = [row.get("user_id") for row in rows]
+        users_map = await self._fetch_users_map(user_ids)
+        normalized_rows = [
+            {
+                "user_id": str(row.get("user_id")),
+                "username": users_map.get(row.get("user_id"), {}).get("username"),
+                "fullname": users_map.get(row.get("user_id"), {}).get("fullname"),
+                "total_amount": int(row.get("total_amount") or 0),
+            }
+            for row in rows
+        ]
+        print("_____________")
+        await self._cache.set_cached_top_by_amount(limit, normalized_rows)
+        print("______________")
+        return {
+            "data": normalized_rows or [],
+            "cached": False,
+        }
+
 
 class AdminStatisticsUseCase:
     def __init__(
         self,
         pool: Pool,
         stats_repo: StatisticsRepository,
+        user_gateway: UserGateway,
         cache: CacheService | None = None,
     ) -> None:
         self._pool = pool
         self._stats_repo = stats_repo
         self._cache = cache
+        self._user_gateway = user_gateway
+
+    async def _fetch_users_map(
+        self,
+        user_ids: list[uuid.UUID],
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        """Fetch users and return as a map for quick lookup."""
+        deduped_ids = list(dict.fromkeys(user_ids))
+        if not deduped_ids:
+            return {}
+
+        try:
+            users = await self._user_gateway.list_users_by_ids(
+                current_user_id=None,
+                user_ids=deduped_ids,
+            )
+        except RestApiError as exc:
+            raise DomainError(f"user service lookup failed: {exc}") from exc
+
+        return {
+            user.id: {
+                "username": user.username,
+                "fullname": user.fullname,
+                "role": user.role,
+            }
+            for user in users
+        }
 
     async def get_system_summary(
         self,
@@ -336,9 +432,16 @@ class AdminStatisticsUseCase:
                 direction_value,
                 conn,
             )
+
+        # Extract user IDs for batch lookup
+        user_ids = [row.get("user_id") for row in streaks]
+        users_map = await self._fetch_users_map(user_ids)
+
         normalized_streaks = [
             {
                 "user_id": row.get("user_id"),
+                "username": users_map.get(row.get("user_id"), {}).get("username"),
+                "fullname": users_map.get(row.get("user_id"), {}).get("fullname"),
                 "current_streak_days": int(row.get("current_streak_days") or 0),
                 "longest_streak_days": int(row.get("longest_streak_days") or 0),
                 "active_days_in_period": int(row.get("active_days_in_period") or 0),
@@ -355,43 +458,25 @@ class AdminStatisticsUseCase:
     async def get_top_by_amount(
         self,
         *,
-        start_from: date,
-        end_to: date,
-        page: int = 1,
         limit: int,
-        direction: Literal["credit", "debit"] | None = None,
+        currency: str = "TOKEN",
     ) -> dict:
-        _validate_date_range(start_from, end_to)
-        direction_value = parse_direction(direction)
-
-        _validate_page_limit(page, limit)
-
-        window_end = page * limit
-        fetch_limit = window_end + 1
 
         async with self._pool.acquire() as conn:
-            rows = await self._stats_repo.get_admin_top_by_amount(
-                start_from,
-                end_to,
-                fetch_limit,
-                direction_value,
-                conn,
-            )
-
+            rows = await self._stats_repo.get_admin_top_by_amount(conn, limit, currency)
+        # Extract user IDs for batch lookup
+        user_ids = [row.get("user_id") for row in rows]
+        users_map = await self._fetch_users_map(user_ids)
         normalized_rows = [
             {
                 "user_id": str(row.get("user_id")),
+                "username": users_map.get(row.get("user_id"), {}).get("username"),
+                "fullname": users_map.get(row.get("user_id"), {}).get("fullname"),
                 "total_amount": int(row.get("total_amount") or 0),
             }
             for row in rows
         ]
-
         return {
-            **_paginate_window_without_count(
-                items=normalized_rows,
-                page=page,
-                limit=limit,
-            ),
-            "direction": direction or "all",
+            "data": normalized_rows or [],
             "cached": False,
         }

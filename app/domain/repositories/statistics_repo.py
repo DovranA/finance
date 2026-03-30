@@ -70,10 +70,5 @@ class StatisticsRepository(ABC):
 
     @abstractmethod
     async def get_admin_top_by_amount(
-        self,
-        start_from: date,
-        end_to: date,
-        limit: int,
-        direction: int | None,
-        conn: Connection,
+        self, conn: Connection, limit: int, currency: str
     ) -> list[dict[str, Any]]: ...
