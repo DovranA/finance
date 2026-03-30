@@ -122,8 +122,8 @@ class RestApiSettings(BaseSettings):
 class UserManagementSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="USER_MANAGEMENT_")
 
-    endpoint: str = ""
-    api_key: str = ""
+    endpoint: str = "https://kong.tmbiz.info/public/user-management"
+    api_key: str = "apikey"
     users_lookup_path: str = "/api/v0/users/lookup"
     timeout_seconds: float = 10.0
 

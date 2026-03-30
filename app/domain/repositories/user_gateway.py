@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Optional
 import uuid
 from abc import ABC, abstractmethod
 
@@ -13,7 +14,7 @@ class UserGateway(ABC):
     async def list_users_by_ids(
         self,
         *,
-        current_user_id: uuid.UUID,
+        current_user_id: Optional[uuid.UUID],
         user_ids: list[uuid.UUID],
     ) -> list[User]:
         """Fetch users by ids from upstream user-management service."""

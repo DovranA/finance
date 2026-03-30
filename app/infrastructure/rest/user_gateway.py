@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from app.core.config import UserManagementSettings
 from app.domain.entities.user import User
@@ -24,14 +24,14 @@ class RestUserGateway(UserGateway):
     async def list_users_by_ids(
         self,
         *,
-        current_user_id: uuid.UUID,
+        current_user_id: Optional[uuid.UUID],
         user_ids: list[uuid.UUID],
     ) -> list[User]:
         if not user_ids:
             return []
 
         payload = {
-            "current_user_id": str(current_user_id),
+            "current_user_id": str(current_user_id) if current_user_id else None,
             "user_ids": [str(user_id) for user_id in user_ids],
         }
         headers = {"Content-Type": "application/json"}

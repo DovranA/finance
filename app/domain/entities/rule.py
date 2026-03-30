@@ -5,29 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
-
-
-# @dataclass
-# class RuleCondition:
-#     """Typed representation of a rule's conditions JSONB."""
-
-#     min_balance: Optional[int] = None
-#     role_required: Optional[list[str]] = None
-#     one_time_only: Optional[bool] = None
-#     daily_limit: Optional[int] = None
-#     required_metadata: Optional[list[str]] = None
-#     idempotency_pattern: Optional[str] = None
-
-
-# @dataclass
-# class RuleAction:
-#     """Typed representation of a rule's actions JSONB."""
-
-#     direction: int = 1  # 1 = credit, -1 = debit
-#     amount: Optional[int] = None
-#     reward: Optional[int] = None
-#     currency: str = "TOKEN"
+from typing import Any
 
 
 @dataclass
@@ -69,7 +47,6 @@ class Rule:
         event_code: str,
         conditions: dict[str, Any] | None = None,
         actions: dict[str, Any] | None = None,
-        description: str | None = None,
         description_i18n: dict[str, str] | None = None,
         priority: int = 0,
         expired_at: datetime | None = None,
@@ -78,7 +55,6 @@ class Rule:
         return cls(
             id=uuid.uuid4(),
             event_code=event_code,
-            description=description,
             description_i18n=description_i18n,
             conditions=conditions or {},
             actions=actions or {},

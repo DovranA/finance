@@ -196,11 +196,11 @@ class ApplyRuleUseCase:
                         source_user_id_uuid = self._parse_uuid(source_user_id)
                         if source_user_id_uuid is None:
                             source_user_id_uuid = targets[0][1]
-                        await self._inject_user_roles_batch(
-                            current_user_id=source_user_id_uuid,
-                            target_user_ids=[target_id for _, target_id in targets],
-                            metadata=metadata,
-                        )
+                        # await self._inject_user_roles_batch(
+                        #     current_user_id=source_user_id_uuid,
+                        #     target_user_ids=[target_id for _, target_id in targets],
+                        #     metadata=metadata,
+                        # )
 
                     any_applied = False
                     first_applied_rule: dict[str, Any] | None = None

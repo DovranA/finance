@@ -287,11 +287,15 @@ class UseCaseProvider(Provider):
         pool: Pool,
         account_repo: AccountRepository,
         stats_repo: StatisticsRepository,
+        user_gateway: UserGateway,
+        cache: CacheService | None,
     ) -> ClientStatisticsUseCase:
         return ClientStatisticsUseCase(
             pool=pool,
             account_repo=account_repo,
             stats_repo=stats_repo,
+            cache=cache,
+            user_gateway=user_gateway,
         )
 
     @provide
@@ -299,11 +303,13 @@ class UseCaseProvider(Provider):
         self,
         pool: Pool,
         stats_repo: StatisticsRepository,
+        user_gateway: UserGateway,
         cache: CacheService | None,
     ) -> AdminStatisticsUseCase:
         return AdminStatisticsUseCase(
             pool=pool,
             stats_repo=stats_repo,
+            user_gateway=user_gateway,
             cache=cache,
         )
 
