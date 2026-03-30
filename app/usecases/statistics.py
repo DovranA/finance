@@ -328,9 +328,7 @@ class ClientStatisticsUseCase:
             }
             for row in rows
         ]
-        print("_____________")
         await self._cache.set_cached_top_by_amount(limit, normalized_rows)
-        print("______________")
         return {
             "data": normalized_rows or [],
             "cached": False,

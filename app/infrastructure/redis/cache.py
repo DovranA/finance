@@ -91,7 +91,6 @@ class CacheService:
     ) -> None:
         key = f"stats:top_by_amount:all_time:{limit}"
         await self._redis.set(key, orjson.dumps(rows), ex=TOP_BY_AMOUNT_CACHE_TTL)
-        print("saved")
 
     # ── One-Time-Per-Event Cache (1 day) ──────────────────
 
