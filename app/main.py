@@ -88,6 +88,7 @@ def create_app() -> FastAPI:
         description="High-load finance service for TikTok-like platform",
         version="1.0.0",
         lifespan=lifespan,
+        swagger_ui_parameters={"persistAuthorization": True},
     )
 
     if settings.app.enable_metrics:

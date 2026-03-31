@@ -40,6 +40,7 @@ from app.infrastructure.rest.client import AsyncRestApiClient
 from app.infrastructure.rest.user_gateway import RestUserGateway
 from app.usecases.get_balance import GetBalanceUseCase
 from app.usecases.set_balance import SetBalanceUseCase
+from app.usecases.set_balance_batch import BatchSetBalanceUseCase
 from app.usecases.superadmin import SuperAdminUseCase
 from app.usecases.transfer import TransferUseCase
 from app.usecases.rule_crud import (
@@ -201,6 +202,19 @@ class UseCaseProvider(Provider):
             transaction_repo=transaction_repo,
             ledger_repo=ledger_repo,
             cache=cache,
+        )
+
+    @provide
+    def set_balance_batch_uc(
+        self,
+        pool: Pool,
+        set_balance_uc: SetBalanceUseCase,
+        account_repo: AccountRepository,
+    ) -> BatchSetBalanceUseCase:
+        return BatchSetBalanceUseCase(
+            pool=pool,
+            set_balance_uc=set_balance_uc,
+            account_repo=account_repo,
         )
 
     @provide
