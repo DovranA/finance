@@ -51,6 +51,17 @@ async def consume_messages(
     async with message.process(requeue=False):
         try:
             events = parse_inbox_events(message.body)
+        except Exception as exc:
+            if metrics is not None:
+                metrics.inc_rabbitmq_message(consumer_name, queue_name, "skipped")
+            logger.warning(
+                "event_skipped_invalid_payload",
+                reason=str(exc),
+                body=message.body[:200],
+            )
+            return
+
+        try:
             logger.info(
                 "event_received",
                 parsed_events=len(events),

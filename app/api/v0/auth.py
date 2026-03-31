@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import jwt
-from fastapi import Depends
+from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
 
@@ -14,6 +14,22 @@ from app.core.config import get_settings
 from app.domain.exceptions import JwtConfigurationError, JwtValidationError
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _validate_api_key(x_api_key: str | None) -> str:
+    settings = get_settings()
+    expected_api_key = settings.user_management.api_key
+
+    if not expected_api_key:
+        raise JwtConfigurationError("USER_MANAGEMENT_API_KEY is not configured")
+
+    if not x_api_key:
+        raise JwtValidationError("missing x-api-key")
+
+    if x_api_key != expected_api_key:
+        raise JwtValidationError("invalid x-api-key")
+
+    return x_api_key
 
 
 def _parse_unix_ts(value: object, claim_name: str) -> int:
@@ -34,6 +50,7 @@ def _validate_temporal_claims(exp: int, iat: int, leeway_seconds: int) -> None:
 
 async def require_jwt_bearer(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    x_api_key: str | None = Header(default=None, alias="x-api-key"),
 ) -> dict:
     settings = get_settings()
 
@@ -41,7 +58,10 @@ async def require_jwt_bearer(
         return {}
 
     if credentials is None or credentials.scheme.lower() != "bearer":
-        raise JwtValidationError("missing bearer token")
+        if x_api_key is not None:
+            _validate_api_key(x_api_key)
+            return {"auth_type": "api_key"}
+        raise JwtValidationError("missing bearer token or x-api-key")
 
     if not settings.jwt.secret_key:
         raise JwtConfigurationError("JWT_SECRET_KEY is not configured")
@@ -70,10 +90,6 @@ async def require_jwt_bearer(
     device_id = payload.get("device_id")
     if not isinstance(device_id, str):
         raise JwtValidationError("invalid device_id claim")
-    try:
-        UUID(device_id)
-    except ValueError as exc:
-        raise JwtValidationError("device_id must be a valid UUID") from exc
 
     role = payload.get("role")
     if not isinstance(role, str) or not role.strip():
@@ -86,6 +102,13 @@ async def require_jwt_bearer(
     )
 
     return payload
+
+
+async def require_api_key(
+    x_api_key: str | None = Header(default=None, alias="x-api-key"),
+) -> str:
+    """Require and validate x-api-key header for endpoint-level access."""
+    return _validate_api_key(x_api_key)
 
 
 async def get_current_user_id(

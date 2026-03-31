@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Body, Depends
 from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
-from app.api.v0.auth import get_current_user_id
+from app.api.v0.auth import get_current_user_id, require_api_key
 from app.api.v0.schemas.account import (
     BalanceResponse,
     NewBalanceRequest,
@@ -36,6 +36,7 @@ async def get_balance(
 async def get_balance(
     user_id: uuid.UUID,
     uc: FromDishka[GetBalanceUseCase],
+    _: str = Depends(require_api_key),
     currency: str | None = None,
 ) -> BalanceResponse:
     """Get the balance for a user account."""
