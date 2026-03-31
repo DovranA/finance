@@ -55,6 +55,18 @@ class PgAccountRepository(AccountRepository):
         )
         return [self._to_entity(row) for row in rows]
 
+    async def list_by_owner_ids(
+        self, user_ids: list[uuid.UUID], conn: Connection
+    ) -> list[Account]:
+        if not user_ids:
+            return []
+        rows = await conn.fetch(
+            f"SELECT {_SELECT_COLS} FROM accounts "
+            "WHERE user_id = ANY($1::uuid[]) ORDER BY user_id, currency",
+            user_ids,
+        )
+        return [self._to_entity(row) for row in rows]
+
     async def get_for_update(
         self, account_id: uuid.UUID, conn: Connection
     ) -> Account | None:
