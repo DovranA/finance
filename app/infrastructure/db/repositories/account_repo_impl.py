@@ -32,7 +32,8 @@ class PgAccountRepository(AccountRepository):
         self, user_id: uuid.UUID, conn: Connection
     ) -> Account | None:
         row = await conn.fetchrow(
-            f"SELECT {_SELECT_COLS} FROM accounts WHERE user_id = $1 FOR UPDATE",
+            f"SELECT {_SELECT_COLS} FROM accounts "
+            "WHERE user_id = $1 AND is_active = TRUE FOR UPDATE",
             user_id,
         )
         return self._to_entity(row) if row else None
@@ -41,7 +42,8 @@ class PgAccountRepository(AccountRepository):
         self, user_id: uuid.UUID, conn: Connection
     ) -> Account | None:
         row = await conn.fetchrow(
-            f"SELECT {_SELECT_COLS} FROM accounts WHERE user_id = $1 ORDER BY currency",
+            f"SELECT {_SELECT_COLS} FROM accounts "
+            "WHERE user_id = $1 AND is_active = TRUE ORDER BY currency",
             user_id,
         )
         return self._to_entity(row) if row else None
@@ -50,7 +52,8 @@ class PgAccountRepository(AccountRepository):
         self, user_id: uuid.UUID, conn: Connection
     ) -> list[Account]:
         rows = await conn.fetch(
-            f"SELECT {_SELECT_COLS} FROM accounts WHERE user_id = $1 ORDER BY currency",
+            f"SELECT {_SELECT_COLS} FROM accounts "
+            "WHERE user_id = $1 AND is_active = TRUE ORDER BY currency",
             user_id,
         )
         return [self._to_entity(row) for row in rows]
@@ -62,7 +65,8 @@ class PgAccountRepository(AccountRepository):
             return []
         rows = await conn.fetch(
             f"SELECT {_SELECT_COLS} FROM accounts "
-            "WHERE user_id = ANY($1::uuid[]) ORDER BY user_id, currency",
+            "WHERE user_id = ANY($1::uuid[]) AND is_active = TRUE "
+            "ORDER BY user_id, currency",
             user_ids,
         )
         return [self._to_entity(row) for row in rows]

@@ -51,3 +51,10 @@ class BatchSetBalanceResponse(BaseModel):
     success: int
     failed: int
     results: list[BatchSetBalanceResult]
+
+
+class DeleteAccountResponse(BaseModel):
+    user_id: str
+    deleted: bool
+    hard_delete: bool = False
+    accounts_affected: int

@@ -52,6 +52,7 @@ from app.usecases.rule_crud import (
 )
 from app.usecases.apply_rule import ApplyRuleUseCase
 from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
+from app.usecases.delete_account import DeleteAccountUseCase
 from app.usecases.inbox_service import InboxService
 from app.usecases.statistics import ClientStatisticsUseCase, AdminStatisticsUseCase
 
@@ -216,6 +217,14 @@ class UseCaseProvider(Provider):
             set_balance_uc=set_balance_uc,
             account_repo=account_repo,
         )
+
+    @provide
+    def delete_account_uc(
+        self,
+        pool: Pool,
+        cache: CacheService | None,
+    ) -> DeleteAccountUseCase:
+        return DeleteAccountUseCase(pool=pool, cache=cache)
 
     @provide
     def transfer_uc(

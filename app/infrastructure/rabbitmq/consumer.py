@@ -10,10 +10,12 @@ from aio_pika import IncomingMessage
 from app.core.logging import get_logger
 from app.core.metrics import AppMetrics
 from app.infrastructure.rabbitmq.dto_parser import (
+    parse_user_deleted_json,
     parse_user_engaged_list,
     parse_user_engaged_list_json,
 )
 from app.infrastructure.rabbitmq.event_mapper import (
+    map_user_deleted_to_inbox_events,
     map_user_engaged_list_to_inbox_events,
 )
 from app.infrastructure.rabbitmq.event_types import InboxEvent
@@ -25,7 +27,12 @@ def parse_inbox_events(body: bytes) -> list[InboxEvent]:
     try:
         dto = parse_user_engaged_list(body)
     except Exception:
-        dto = parse_user_engaged_list_json(body)
+        try:
+            dto = parse_user_engaged_list_json(body)
+            return map_user_engaged_list_to_inbox_events(dto)
+        except Exception:
+            deleted_dto = parse_user_deleted_json(body)
+            return map_user_deleted_to_inbox_events(deleted_dto)
     return map_user_engaged_list_to_inbox_events(dto)
 
 

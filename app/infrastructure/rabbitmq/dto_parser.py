@@ -33,6 +33,13 @@ class UserEngagedListDTO:
     post_list: list[UserPostEventDTO]
 
 
+@dataclass(frozen=True)
+class UserDeletedDTO:
+    header: UserEventHeaderDTO
+    user_id: str
+    role: str
+
+
 def parse_user_engaged_list(body: bytes) -> UserEngagedListDTO:
     payload = finance_pb2.UserEngagedList()
     payload.ParseFromString(body)
@@ -124,4 +131,56 @@ def parse_user_engaged_list_json(body: bytes) -> UserEngagedListDTO:
         user_id=str(payload.get("user_id", "")),
         role=str(payload.get("role", "")),
         post_list=posts,
+    )
+
+
+def parse_user_deleted_json(body: bytes) -> UserDeletedDTO:
+    """Parse user-deleted event JSON payload into transport DTO."""
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception as exc:
+        raise ValueError("invalid JSON payload") from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError("JSON payload must be an object")
+
+    header_raw = payload.get("header")
+    if not isinstance(header_raw, dict):
+        header_raw = {}
+
+    payload_type = str(payload.get("type", "")).strip().lower()
+    payload_event_code = str(payload.get("event_code", "")).strip().lower()
+    header_type = str(header_raw.get("type", "")).strip().lower()
+
+    # Accept delete only when event type is explicitly declared.
+    accepted_types = {"user.deleted", "user_deleted"}
+    if not any(
+        marker in accepted_types
+        for marker in (payload_type, payload_event_code, header_type)
+    ):
+        raise ValueError("payload is not user deleted event")
+
+    user_id = payload.get("user_id", payload.get("userId", ""))
+    if not user_id:
+        raise ValueError("JSON payload must contain user_id")
+
+    header = UserEventHeaderDTO(
+        trace_id=str(header_raw.get("trace_id", "")),
+        event_type=(
+            str(header_raw.get("type"))
+            if header_raw.get("type")
+            else (str(payload.get("type")) or "user.deleted")
+        ),
+        origin=str(header_raw.get("origin", "")),
+        timestamp_iso=(
+            str(header_raw["timestamp"])
+            if header_raw.get("timestamp") is not None
+            else None
+        ),
+    )
+
+    return UserDeletedDTO(
+        header=header,
+        user_id=str(user_id),
+        role=str(payload.get("role", "")),
     )

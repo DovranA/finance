@@ -22,6 +22,27 @@ class InboxService:
 
         metrics = await register_metrics()
 
+        deletion_events = [
+            event for event in events if event.event_code == "user_deleted"
+        ]
+        staged_events = [
+            event for event in events if event.event_code != "user_deleted"
+        ]
+
+        if deletion_events:
+            try:
+                await self._delete_user_accounts(deletion_events)
+            except Exception:
+                for event in deletion_events:
+                    metrics.inc_inbox_events("delete_failed", event.event_code)
+                raise
+
+            for event in deletion_events:
+                metrics.inc_inbox_events("delete_applied", event.event_code)
+
+        if not staged_events:
+            return
+
         records = [
             (
                 event.event_id,
@@ -30,10 +51,10 @@ class InboxService:
                 event.role,
                 json.dumps(event.metadata),
             )
-            for event in events
+            for event in staged_events
         ]
 
-        for event in events:
+        for event in staged_events:
             metrics.inc_inbox_events("queued_for_insert", event.event_code)
 
         async with self._pool.acquire() as conn:
@@ -46,9 +67,23 @@ class InboxService:
                     records,
                 )
             except Exception:
-                for event in events:
+                for event in staged_events:
                     metrics.inc_inbox_events("insert_failed", event.event_code)
                 raise
 
-        for event in events:
+        for event in staged_events:
             metrics.inc_inbox_events("inserted", event.event_code)
+
+    async def _delete_user_accounts(self, events: list[InboxEvent]) -> None:
+        user_ids = list({event.user_id for event in events})
+        if not user_ids:
+            return
+
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "UPDATE accounts "
+                    "SET is_active = FALSE, updated_at = NOW() "
+                    "WHERE user_id = ANY($1::uuid[]) AND is_active = TRUE",
+                    user_ids,
+                )
