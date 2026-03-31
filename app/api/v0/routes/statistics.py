@@ -3,10 +3,12 @@
 from datetime import date, timedelta
 from uuid import UUID
 from typing import Literal
+import uuid
 
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
+from app.api.v0.auth import get_current_user_id
 from app.api.v0.schemas.statistics import (
     AdminStreaksPaginatedResponse,
     AdminSystemSummaryResponse,
@@ -38,7 +40,7 @@ admin_router = APIRouter(
 async def client_summary(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
-    period: str = Query("30d", pattern=r"^\d+d$"),
+    period: str = Query("month", pattern=r"^(day|week|month)$"),
     direction: Literal["credit", "debit"] | None = Query(None),
 ) -> ClientStatsSummaryResponse:
     result = await uc.get_summary(user_id=user_id, period=period, direction=direction)
@@ -52,7 +54,7 @@ async def client_summary(
 async def client_timeline(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
-    period: str = Query("30d", pattern=r"^\d+d$"),
+    period: str = Query("month", pattern=r"^(day|week|month)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
@@ -74,7 +76,7 @@ async def client_timeline(
 async def client_by_category(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
-    period: str = Query("30d", pattern=r"^\d+d$"),
+    period: str = Query("month", pattern=r"^(day|week|month)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
@@ -96,7 +98,87 @@ async def client_by_category(
 async def client_streaks(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
-    period: str = Query("30d", pattern=r"^\d+d$"),
+    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    direction: Literal["credit", "debit"] | None = Query(None),
+) -> ClientStatsStreaksPaginatedResponse:
+    result = await uc.get_streaks(
+        user_id=user_id,
+        period=period,
+        page=page,
+        limit=limit,
+        direction=direction,
+    )
+    return ClientStatsStreaksPaginatedResponse(**result)
+
+
+@client_router.get(
+    "/own/statistics/summary",
+    response_model=ClientStatsSummaryResponse,
+)
+async def owner_summary(
+    uc: FromDishka[ClientStatisticsUseCase],
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    direction: Literal["credit", "debit"] | None = Query(None),
+) -> ClientStatsSummaryResponse:
+    result = await uc.get_summary(user_id=user_id, period=period, direction=direction)
+    return ClientStatsSummaryResponse(**result)
+
+
+@client_router.get(
+    "/own/statistics/timeline",
+    response_model=ClientStatsTimelinePaginatedResponse,
+)
+async def owner_timeline(
+    uc: FromDishka[ClientStatisticsUseCase],
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    direction: Literal["credit", "debit"] | None = Query(None),
+) -> ClientStatsTimelinePaginatedResponse:
+    result = await uc.get_timeline(
+        user_id=user_id,
+        period=period,
+        page=page,
+        limit=limit,
+        direction=direction,
+    )
+    return ClientStatsTimelinePaginatedResponse(**result)
+
+
+@client_router.get(
+    "/own/statistics/by-category",
+    response_model=ClientStatsByCategoryPaginatedResponse,
+)
+async def owner_by_category(
+    uc: FromDishka[ClientStatisticsUseCase],
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    direction: Literal["credit", "debit"] | None = Query(None),
+) -> ClientStatsByCategoryPaginatedResponse:
+    result = await uc.get_by_category(
+        user_id=user_id,
+        period=period,
+        page=page,
+        limit=limit,
+        direction=direction,
+    )
+    return ClientStatsByCategoryPaginatedResponse(**result)
+
+
+@client_router.get(
+    "/own/statistics/streaks",
+    response_model=ClientStatsStreaksPaginatedResponse,
+)
+async def owner_streaks(
+    uc: FromDishka[ClientStatisticsUseCase],
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    period: str = Query("month", pattern=r"^(day|week|month)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
@@ -176,12 +258,11 @@ async def admin_top_by_amount(
 @client_router.get(
     "/top-by-amount",
 )
-async def admin_top_by_amount(
+async def client_top_by_amount(
     uc: FromDishka[ClientStatisticsUseCase],
+    user_id: uuid.UUID = Depends(get_current_user_id),
     limit: int = Query(20, ge=1, le=100),
 ):
 
-    result = await uc.get_top_by_amount(
-        limit=limit,
-    )
+    result = await uc.get_top_by_amount(limit=limit, current_user=user_id)
     return result

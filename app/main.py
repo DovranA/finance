@@ -20,7 +20,12 @@ from app.core.logging import setup_logging, get_logger
 from app.core.metrics import register_metrics, AppMetrics
 from app.di import create_container
 from app.grpc_server import create_grpc_server
-from app.infrastructure.rabbitmq.inbox_consumer import run_consumer
+from app.infrastructure.rabbitmq.inbox_consumer import (
+    run_consumer as run_inbox_consumer,
+)
+from app.infrastructure.rabbitmq.competition_consumer import (
+    run_consumer as run_competition_consumer,
+)
 from app.domain.exceptions import (
     AccountInactive,
     AccountNotFound,
@@ -200,21 +205,36 @@ async def lifespan(app: FastAPI):
     await app.state.grpc_server.start()
     logger.info("grpc_server_started")
 
-    # RabbitMQ consumer
+    # RabbitMQ consumers
     app.state.inbox_consumer_task = None
+    app.state.competition_consumer_task = None
     logger.info(
         "inbox_consumer_toggle",
         enabled=settings.app.enable_inbox_consumer,
     )
     if settings.app.enable_inbox_consumer:
         app.state.inbox_consumer_task = asyncio.create_task(
-            run_consumer(app.state.container),
+            run_inbox_consumer(app.state.container),
             name="inbox_consumer",
         )
         app.state.inbox_consumer_task.add_done_callback(
             lambda t: _log_task_result("inbox_consumer", t)
         )
         logger.info("inbox_consumer_started")
+
+    logger.info(
+        "competition_consumer_toggle",
+        enabled=settings.app.enable_competition_consumer,
+    )
+    if settings.app.enable_competition_consumer:
+        app.state.competition_consumer_task = asyncio.create_task(
+            run_competition_consumer(app.state.container),
+            name="competition_consumer",
+        )
+        app.state.competition_consumer_task.add_done_callback(
+            lambda t: _log_task_result("competition_consumer", t)
+        )
+        logger.info("competition_consumer_started")
 
     if settings.app.enable_metrics:
         app.state.db_metrics_task = asyncio.create_task(
@@ -233,12 +253,20 @@ async def lifespan(app: FastAPI):
 
     # ── SHUTDOWN ────────────────────────────
 
-    # stop consumer
+    # stop consumers
     task = getattr(app.state, "inbox_consumer_task", None)
     if task:
         task.cancel()
         try:
             await task
+        except asyncio.CancelledError:
+            pass
+
+    competition_task = getattr(app.state, "competition_consumer_task", None)
+    if competition_task:
+        competition_task.cancel()
+        try:
+            await competition_task
         except asyncio.CancelledError:
             pass
 

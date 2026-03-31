@@ -55,6 +55,7 @@ class RabbitMQSettings(BaseSettings):
     vhost: str = "/"
     exchange: str = "finance"
     queue_rewards: str = "finance.processed:user.event"
+    queue_competition: str = "user-competition.joined:update.finance"
     prefetch_count: int = 100
 
     @property
@@ -89,6 +90,7 @@ class AppSettings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     enable_inbox_consumer: bool = True
+    enable_competition_consumer: bool = True
     enable_metrics: bool = True
     metrics_port: int | None = None
     metrics_db_interval_seconds: float = 5.0

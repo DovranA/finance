@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import date
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from asyncpg import Pool
 import orjson
@@ -25,9 +25,20 @@ _PERIOD_RE = re.compile(r"^(\d+)d$")
 
 
 def parse_period_days(period: str) -> int:
-    match = _PERIOD_RE.match(period or "")
+    normalized = (period or "").strip().lower()
+
+    if normalized == "day":
+        return 1
+    if normalized == "week":
+        return 7
+    if normalized == "month":
+        return 30
+
+    match = _PERIOD_RE.match(normalized)
     if not match:
-        raise ValueError("period must be in Nd format, e.g. 7d or 30d")
+        raise ValueError(
+            "period must be one of: day, week, month (or Nd format like 7d)"
+        )
     days = int(match.group(1))
     if days <= 0 or days > 3650:
         raise ValueError("period days must be between 1 and 3650")
@@ -306,6 +317,7 @@ class ClientStatisticsUseCase:
         self,
         *,
         limit: int,
+        current_user: Optional[uuid.UUID],
         currency: str = "TOKEN",
     ) -> dict:
         cached_normalized_rows = await self._cache.get_cached_top_by_amount(limit)

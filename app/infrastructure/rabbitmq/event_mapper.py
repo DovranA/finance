@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from app.infrastructure.rabbitmq.dto_parser import UserEngagedListDTO
+from app.infrastructure.rabbitmq.dto_parser import UserDeletedDTO, UserEngagedListDTO
 from app.infrastructure.rabbitmq.event_types import InboxEvent
 
 
@@ -51,3 +51,29 @@ def map_user_engaged_list_to_inbox_events(
             )
 
     return events
+
+
+def map_user_deleted_to_inbox_events(dto: UserDeletedDTO) -> list[InboxEvent]:
+    try:
+        deleted_user_id = uuid.UUID(dto.user_id)
+    except ValueError as exc:
+        raise ValueError("UserDeleted.user_id must be a UUID") from exc
+
+    trace_id = dto.header.trace_id or str(uuid.uuid4())
+    timestamp = dto.header.timestamp_iso or datetime.now(timezone.utc).isoformat()
+
+    unique_key = f"{trace_id}:{dto.user_id}:user_deleted"
+    return [
+        InboxEvent(
+            event_id=uuid.uuid5(uuid.NAMESPACE_URL, unique_key),
+            event_code="user_deleted",
+            user_id=deleted_user_id,
+            role=dto.role or None,
+            metadata={
+                "trace_id": trace_id,
+                "origin": dto.header.origin,
+                "type": dto.header.event_type or "user.deleted",
+                "timestamp": timestamp,
+            },
+        )
+    ]
