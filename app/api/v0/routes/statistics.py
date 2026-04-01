@@ -246,11 +246,15 @@ async def admin_streaks(
 )
 async def admin_top_by_amount(
     uc: FromDishka[AdminStatisticsUseCase],
+    user_id: uuid.UUID | None = Query(None),
+    current_page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
 ):
 
     result = await uc.get_top_by_amount(
+        page=current_page,
         limit=limit,
+        current_user_id=user_id,
     )
     return result
 
@@ -261,8 +265,13 @@ async def admin_top_by_amount(
 async def client_top_by_amount(
     uc: FromDishka[ClientStatisticsUseCase],
     user_id: uuid.UUID = Depends(get_current_user_id),
+    current_page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
 ):
 
-    result = await uc.get_top_by_amount(limit=limit, current_user=user_id)
+    result = await uc.get_top_by_amount(
+        page=current_page,
+        limit=limit,
+        current_user_id=user_id,
+    )
     return result

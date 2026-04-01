@@ -55,6 +55,7 @@ from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
 from app.usecases.delete_account import DeleteAccountUseCase
 from app.usecases.inbox_service import InboxService
 from app.usecases.competition_service import CompetitionService
+from app.usecases.register_user import RegisterUserUseCase
 from app.usecases.statistics import ClientStatisticsUseCase, AdminStatisticsUseCase
 
 
@@ -309,6 +310,14 @@ class UseCaseProvider(Provider):
     @provide
     def competition_service(self, pool: Pool) -> CompetitionService:
         return CompetitionService(pool=pool)
+
+    @provide
+    def register_user_uc(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+    ) -> RegisterUserUseCase:
+        return RegisterUserUseCase(pool=pool, account_repo=account_repo)
 
     @provide
     def client_statistics_uc(

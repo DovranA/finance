@@ -26,6 +26,9 @@ from app.infrastructure.rabbitmq.inbox_consumer import (
 from app.infrastructure.rabbitmq.competition_consumer import (
     run_consumer as run_competition_consumer,
 )
+from app.infrastructure.rabbitmq.user_registered_consumer import (
+    run_consumer as run_user_registered_consumer,
+)
 from app.domain.exceptions import (
     AccountInactive,
     AccountNotFound,
@@ -208,6 +211,7 @@ async def lifespan(app: FastAPI):
     # RabbitMQ consumers
     app.state.inbox_consumer_task = None
     app.state.competition_consumer_task = None
+    app.state.user_registered_consumer_task = None
     logger.info(
         "inbox_consumer_toggle",
         enabled=settings.app.enable_inbox_consumer,
@@ -235,6 +239,20 @@ async def lifespan(app: FastAPI):
             lambda t: _log_task_result("competition_consumer", t)
         )
         logger.info("competition_consumer_started")
+
+    logger.info(
+        "user_registered_consumer_toggle",
+        enabled=settings.app.enable_user_registered_consumer,
+    )
+    if settings.app.enable_user_registered_consumer:
+        app.state.user_registered_consumer_task = asyncio.create_task(
+            run_user_registered_consumer(app.state.container),
+            name="user_registered_consumer",
+        )
+        app.state.user_registered_consumer_task.add_done_callback(
+            lambda t: _log_task_result("user_registered_consumer", t)
+        )
+        logger.info("user_registered_consumer_started")
 
     if settings.app.enable_metrics:
         app.state.db_metrics_task = asyncio.create_task(
@@ -267,6 +285,14 @@ async def lifespan(app: FastAPI):
         competition_task.cancel()
         try:
             await competition_task
+        except asyncio.CancelledError:
+            pass
+
+    user_registered_task = getattr(app.state, "user_registered_consumer_task", None)
+    if user_registered_task:
+        user_registered_task.cancel()
+        try:
+            await user_registered_task
         except asyncio.CancelledError:
             pass
 

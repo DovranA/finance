@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, Header
+from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
 
@@ -61,7 +61,7 @@ async def require_jwt_bearer(
         if x_api_key is not None:
             _validate_api_key(x_api_key)
             return {"auth_type": "api_key"}
-        raise JwtValidationError("missing bearer token or x-api-key")
+        raise HTTPException(status_code=403, detail="not authorized")
 
     if not settings.jwt.secret_key:
         raise JwtConfigurationError("JWT_SECRET_KEY is not configured")
@@ -105,7 +105,9 @@ async def require_jwt_bearer(
 
 
 async def require_api_key(
-    x_api_key: str | None = Header(default=None, alias="x-api-key"),
+    x_api_key: str | None = Header(
+        default=None, alias="x-api-key", include_in_schema=False
+    ),
 ) -> str:
     """Require and validate x-api-key header for endpoint-level access."""
     return _validate_api_key(x_api_key)

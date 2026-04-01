@@ -12,12 +12,10 @@ import orjson
 
 from app.core.logging import get_logger
 from app.domain.entities.user import User
-from app.domain.exceptions import DomainError
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.statistics_repo import StatisticsRepository
 from app.domain.repositories.user_gateway import UserGateway
 from app.infrastructure.redis.cache import CacheService
-from app.infrastructure.rest.client import RestApiError
 
 logger = get_logger(__name__)
 
@@ -133,8 +131,13 @@ class ClientStatisticsUseCase:
                 current_user_id=None,
                 user_ids=deduped_ids,
             )
-        except RestApiError as exc:
-            raise DomainError(f"user service lookup failed: {exc}") from exc
+        except Exception as exc:
+            logger.warning(
+                "user_lookup_unavailable_returning_without_profiles",
+                error=str(exc),
+                requested_users=len(deduped_ids),
+            )
+            return {}
 
         return {
             user.id: {
@@ -316,34 +319,95 @@ class ClientStatisticsUseCase:
     async def get_top_by_amount(
         self,
         *,
-        limit: int,
-        current_user: Optional[uuid.UUID],
+        page: int = 1,
+        limit: int = 20,
+        current_user_id: Optional[uuid.UUID] = None,
         currency: str = "TOKEN",
     ) -> dict:
-        cached_normalized_rows = await self._cache.get_cached_top_by_amount(limit)
-        if cached_normalized_rows:
-            return {
-                "data": cached_normalized_rows or [],
-                "cached": True,
-            }
+        _validate_page_limit(page, limit)
+        offset = (page - 1) * limit
+
+        total_count = 0
+        normalized_rows: list[dict[str, Any]] = []
+        from_cache = False
+
+        if self._cache is not None:
+            cached_payload = await self._cache.get_cached_top_by_amount_page(
+                page=page,
+                limit=limit,
+                currency=currency,
+            )
+            if cached_payload is not None:
+                total_count = int(cached_payload.get("total_count") or 0)
+                normalized_rows = list(cached_payload.get("rows") or [])
+                from_cache = True
+
         async with self._pool.acquire() as conn:
-            rows = await self._stats_repo.get_admin_top_by_amount(conn, limit, currency)
-        # Extract user IDs for batch lookup
-        user_ids = [row.get("user_id") for row in rows]
-        users_map = await self._fetch_users_map(user_ids)
-        normalized_rows = [
-            {
-                "user_id": str(row.get("user_id")),
-                "username": users_map.get(row.get("user_id"), {}).get("username"),
-                "fullname": users_map.get(row.get("user_id"), {}).get("fullname"),
-                "total_amount": int(row.get("total_amount") or 0),
-            }
-            for row in rows
-        ]
-        await self._cache.set_cached_top_by_amount(limit, normalized_rows)
+            my_rank = None
+            if current_user_id is not None:
+                my_rank = await self._stats_repo.get_admin_top_by_amount_rank(
+                    conn,
+                    current_user_id,
+                    currency,
+                )
+            if not from_cache:
+                total_count = await self._stats_repo.get_admin_top_by_amount_count(
+                    conn,
+                    currency,
+                )
+                rows = await self._stats_repo.get_admin_top_by_amount(
+                    conn,
+                    limit,
+                    offset,
+                    currency,
+                )
+
+                # Extract user IDs for batch lookup
+                user_ids = [row.get("user_id") for row in rows]
+                users_map = await self._fetch_users_map(user_ids)
+                normalized_rows = [
+                    {
+                        "user_id": str(row.get("user_id")),
+                        "username": users_map.get(row.get("user_id"), {}).get(
+                            "username"
+                        ),
+                        "fullname": users_map.get(row.get("user_id"), {}).get(
+                            "fullname"
+                        ),
+                        "author_role": users_map.get(row.get("user_id"), {}).get(
+                            "author_role"
+                        ),
+                        "is_following": (
+                            users_map.get(row.get("user_od"), {}).get("is_following")
+                            if current_user_id
+                            else None
+                        ),
+                        "total_amount": int(row.get("total_amount") or 0),
+                    }
+                    for row in rows
+                ]
+
+        if self._cache is not None and not from_cache:
+            await self._cache.set_cached_top_by_amount_page(
+                page=page,
+                limit=limit,
+                currency=currency,
+                payload={
+                    "total_count": total_count,
+                    "rows": normalized_rows,
+                },
+            )
+
         return {
             "data": normalized_rows or [],
-            "cached": False,
+            "page_info": _build_page_info(
+                total_count=total_count,
+                page=page,
+                limit=limit,
+            ),
+            "my_rank": my_rank,
+            "total_participants": total_count,
+            "cached": from_cache,
         }
 
 
@@ -374,14 +438,20 @@ class AdminStatisticsUseCase:
                 current_user_id=None,
                 user_ids=deduped_ids,
             )
-        except RestApiError as exc:
-            raise DomainError(f"user service lookup failed: {exc}") from exc
+        except Exception as exc:
+            logger.warning(
+                "user_lookup_unavailable_returning_without_profiles",
+                error=str(exc),
+                requested_users=len(deduped_ids),
+            )
+            return {}
 
         return {
             user.id: {
                 "username": user.username,
                 "fullname": user.fullname,
-                "role": user.role,
+                "author_role": user.role,
+                "is_following": user.is_following,
             }
             for user in users
         }
@@ -468,12 +538,32 @@ class AdminStatisticsUseCase:
     async def get_top_by_amount(
         self,
         *,
-        limit: int,
+        page: int = 1,
+        limit: int = 20,
+        current_user_id: Optional[uuid.UUID] = None,
         currency: str = "TOKEN",
     ) -> dict:
+        _validate_page_limit(page, limit)
+        offset = (page - 1) * limit
 
         async with self._pool.acquire() as conn:
-            rows = await self._stats_repo.get_admin_top_by_amount(conn, limit, currency)
+            total_count = await self._stats_repo.get_admin_top_by_amount_count(
+                conn,
+                currency,
+            )
+            my_rank = None
+            if current_user_id is not None:
+                my_rank = await self._stats_repo.get_admin_top_by_amount_rank(
+                    conn,
+                    current_user_id,
+                    currency,
+                )
+            rows = await self._stats_repo.get_admin_top_by_amount(
+                conn,
+                limit,
+                offset,
+                currency,
+            )
         # Extract user IDs for batch lookup
         user_ids = [row.get("user_id") for row in rows]
         users_map = await self._fetch_users_map(user_ids)
@@ -482,11 +572,24 @@ class AdminStatisticsUseCase:
                 "user_id": str(row.get("user_id")),
                 "username": users_map.get(row.get("user_id"), {}).get("username"),
                 "fullname": users_map.get(row.get("user_id"), {}).get("fullname"),
+                "author_role": users_map.get(row.get("user_id"), {}).get("author_role"),
+                "is_following": (
+                    users_map.get(row.get("user_od"), {}).get("is_following")
+                    if current_user_id
+                    else None
+                ),
                 "total_amount": int(row.get("total_amount") or 0),
             }
             for row in rows
         ]
         return {
             "data": normalized_rows or [],
+            "page_info": _build_page_info(
+                total_count=total_count,
+                page=page,
+                limit=limit,
+            ),
+            "my_rank": my_rank,
+            "total_participants": total_count,
             "cached": False,
         }
