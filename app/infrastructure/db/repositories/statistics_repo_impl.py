@@ -258,23 +258,77 @@ class PgStatisticsRepository(StatisticsRepository):
         self,
         conn: Connection,
         limit: int = 10,
+        offset: int = 0,
         currency: str = "TOKEN",
     ) -> list[dict[str, Any]]:
         rows = await conn.fetch(
             """
-            SELECT a.user_id, SUM(a.balance) AS total_amount
-FROM accounts a
-    JOIN ledger_entries le ON a.id = le.account_id
-WHERE
-    a.owner_type = 'user'
-    AND a.currency = $1 -- Filter for the specific currency
-    AND a.user_id IS NOT NULL
-GROUP BY
-    a.user_id
-ORDER BY total_amount DESC, a.user_id ASC
-LIMIT $2;
+            SELECT
+                a.user_id,
+                COALESCE(SUM(a.balance), 0)::BIGINT AS total_amount
+            FROM accounts a
+            JOIN competition c ON c.user_id = a.user_id
+            WHERE a.owner_type = 'user'
+              AND a.currency = $1
+              AND a.user_id IS NOT NULL
+            GROUP BY a.user_id
+            ORDER BY total_amount DESC, a.user_id ASC
+            LIMIT $2 OFFSET $3
             """,
             currency,
             limit,
+            offset,
         )
         return [dict(r) for r in rows]
+
+    async def get_admin_top_by_amount_count(
+        self,
+        conn: Connection,
+        currency: str = "TOKEN",
+    ) -> int:
+        count = await conn.fetchval(
+            """
+            SELECT COUNT(*)::INT
+            FROM (
+                SELECT a.user_id
+                FROM accounts a
+                JOIN competition c ON c.user_id = a.user_id
+                WHERE a.owner_type = 'user'
+                  AND a.currency = $1
+                  AND a.user_id IS NOT NULL
+                GROUP BY a.user_id
+            ) ranked_users
+            """,
+            currency,
+        )
+        return int(count or 0)
+
+    async def get_admin_top_by_amount_rank(
+        self,
+        conn: Connection,
+        user_id: uuid.UUID,
+        currency: str = "TOKEN",
+    ) -> int | None:
+        rank = await conn.fetchval(
+            """
+            WITH ranked AS (
+                SELECT
+                    a.user_id,
+                    RANK() OVER (
+                        ORDER BY COALESCE(SUM(a.balance), 0)::BIGINT DESC, a.user_id ASC
+                    )::INT AS rank_position
+                FROM accounts a
+                JOIN competition c ON c.user_id = a.user_id
+                WHERE a.owner_type = 'user'
+                  AND a.currency = $1
+                  AND a.user_id IS NOT NULL
+                GROUP BY a.user_id
+            )
+            SELECT rank_position
+            FROM ranked
+            WHERE user_id = $2
+            """,
+            currency,
+            user_id,
+        )
+        return int(rank) if rank is not None else None

@@ -1,0 +1,82 @@
+"""Use case for creating a default finance account for newly registered users."""
+
+from __future__ import annotations
+
+import uuid
+
+from asyncpg import Pool
+
+from app.core.logging import get_logger
+from app.domain.entities.account import Account
+from app.domain.repositories.account_repo import AccountRepository
+from app.infrastructure.db.transaction import transaction
+
+logger = get_logger(__name__)
+
+
+class RegisterUserUseCase:
+    """Create a default TOKEN account for a newly registered user if it does not exist."""
+
+    def __init__(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+    ) -> None:
+        self._pool = pool
+        self._account_repo = account_repo
+
+    async def execute(
+        self,
+        *,
+        user_id: uuid.UUID,
+        role: str | None,
+        currency: str = "TOKEN",
+    ) -> dict:
+        currency = currency.upper()
+        owner_type = (role or "user").strip().lower() or "user"
+
+        async with transaction(self._pool) as conn:
+            existing_accounts = await self._account_repo.list_by_owner_id(user_id, conn)
+            existing_account = next(
+                (
+                    account
+                    for account in existing_accounts
+                    if account.currency.upper() == currency
+                ),
+                None,
+            )
+            if existing_account is not None:
+                logger.info(
+                    "registered_user_account_already_exists",
+                    user_id=str(user_id),
+                    account_id=str(existing_account.id),
+                    currency=currency,
+                )
+                return {
+                    "created": False,
+                    "account_id": str(existing_account.id),
+                    "user_id": str(user_id),
+                    "currency": existing_account.currency,
+                }
+
+            account = Account.create(
+                user_id=user_id,
+                currency=currency,
+                owner_type=owner_type,
+                balance=0,
+            )
+            await self._account_repo.create(account, conn)
+
+        logger.info(
+            "registered_user_account_created",
+            user_id=str(user_id),
+            account_id=str(account.id),
+            currency=currency,
+            owner_type=owner_type,
+        )
+        return {
+            "created": True,
+            "account_id": str(account.id),
+            "user_id": str(user_id),
+            "currency": currency,
+        }

@@ -70,5 +70,24 @@ class StatisticsRepository(ABC):
 
     @abstractmethod
     async def get_admin_top_by_amount(
-        self, conn: Connection, limit: int, currency: str
+        self,
+        conn: Connection,
+        limit: int,
+        offset: int,
+        currency: str,
     ) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def get_admin_top_by_amount_count(
+        self,
+        conn: Connection,
+        currency: str,
+    ) -> int: ...
+
+    @abstractmethod
+    async def get_admin_top_by_amount_rank(
+        self,
+        conn: Connection,
+        user_id: uuid.UUID,
+        currency: str,
+    ) -> int | None: ...

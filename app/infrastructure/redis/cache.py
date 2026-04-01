@@ -92,6 +92,28 @@ class CacheService:
         key = f"stats:top_by_amount:all_time:{limit}"
         await self._redis.set(key, orjson.dumps(rows), ex=TOP_BY_AMOUNT_CACHE_TTL)
 
+    async def get_cached_top_by_amount_page(
+        self,
+        page: int,
+        limit: int,
+        currency: str,
+    ) -> dict[str, Any] | None:
+        key = f"stats:top_by_amount:{currency.upper()}:{page}:{limit}"
+        data = await self._redis.get(key)
+        if data is None:
+            return None
+        return orjson.loads(data)
+
+    async def set_cached_top_by_amount_page(
+        self,
+        page: int,
+        limit: int,
+        currency: str,
+        payload: dict[str, Any],
+    ) -> None:
+        key = f"stats:top_by_amount:{currency.upper()}:{page}:{limit}"
+        await self._redis.set(key, orjson.dumps(payload), ex=TOP_BY_AMOUNT_CACHE_TTL)
+
     # ── One-Time-Per-Event Cache (1 day) ──────────────────
 
     ONE_TIME_TTL = 86400  # 1 day

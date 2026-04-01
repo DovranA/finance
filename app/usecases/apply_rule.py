@@ -492,6 +492,21 @@ class ApplyRuleUseCase:
         actions = rule.actions
         direction = LedgerDirection(actions.get("direction", 1))
         amount = actions.get("amount", 0)
+
+        if amount <= 0:
+            # Support single-event rules that define per-target amounts
+            # (e.g. target_amounts.user_id) without requiring batch path.
+            target_amounts = actions.get("target_amounts") or {}
+            if isinstance(target_amounts, dict):
+                target_key = str(metadata.get("target_key") or "user_id")
+                fallback_amount = target_amounts.get(target_key)
+                if fallback_amount is None:
+                    fallback_amount = target_amounts.get("user_id")
+                try:
+                    amount = int(fallback_amount or 0)
+                except (TypeError, ValueError):
+                    amount = 0
+
         if amount <= 0:
             return None
 
