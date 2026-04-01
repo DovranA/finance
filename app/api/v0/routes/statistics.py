@@ -34,7 +34,7 @@ admin_router = APIRouter(
 
 
 @client_router.get(
-    "/{user_id}/statistics/summary",
+    "/{user_id:uuid}/statistics/summary",
     response_model=ClientStatsSummaryResponse,
 )
 async def client_summary(
@@ -48,7 +48,7 @@ async def client_summary(
 
 
 @client_router.get(
-    "/{user_id}/statistics/timeline",
+    "/{user_id:uuid}/statistics/timeline",
     response_model=ClientStatsTimelinePaginatedResponse,
 )
 async def client_timeline(
@@ -70,7 +70,7 @@ async def client_timeline(
 
 
 @client_router.get(
-    "/{user_id}/statistics/by-category",
+    "/{user_id:uuid}/statistics/by-category",
     response_model=ClientStatsByCategoryPaginatedResponse,
 )
 async def client_by_category(
@@ -92,7 +92,7 @@ async def client_by_category(
 
 
 @client_router.get(
-    "/{user_id}/statistics/streaks",
+    "/{user_id:uuid}/statistics/streaks",
     response_model=ClientStatsStreaksPaginatedResponse,
 )
 async def client_streaks(

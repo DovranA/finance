@@ -35,7 +35,7 @@ def map_user_engaged_list_to_inbox_events(
                 InboxEvent(
                     event_id=uuid.uuid5(uuid.NAMESPACE_URL, unique_key),
                     event_code=code,
-                    user_id=author_id,
+                    user_id=actor_id,
                     role=post.role or dto.role or None,
                     metadata={
                         "actor_id": str(actor_id),

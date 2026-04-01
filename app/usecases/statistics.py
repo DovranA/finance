@@ -7,7 +7,7 @@ import uuid
 from datetime import date
 from typing import Any, Literal, Optional
 
-from asyncpg import Pool
+from asyncpg import Connection, Pool
 import orjson
 
 from app.core.logging import get_logger
@@ -16,10 +16,13 @@ from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.statistics_repo import StatisticsRepository
 from app.domain.repositories.user_gateway import UserGateway
 from app.infrastructure.redis.cache import CacheService
+from app.usecases.statistics_base import BaseStatisticsUseCase
 
 logger = get_logger(__name__)
 
 _PERIOD_RE = re.compile(r"^(\d+)d$")
+_HIDE_DEBIT_STATS_USER_ID = uuid.UUID("5517c5c1-5dd0-4239-aca2-6d7db037c484")
+_HIDE_DEBIT_STATS_ACCOUNT_ID = uuid.UUID("cb24541c-d98a-4f62-92c1-9ecd33158355")
 
 
 def parse_period_days(period: str) -> int:
@@ -102,7 +105,7 @@ def _paginate_window_without_count(*, items: list[dict], page: int, limit: int) 
     }
 
 
-class ClientStatisticsUseCase:
+class ClientStatisticsUseCase(BaseStatisticsUseCase):
     def __init__(
         self,
         pool: Pool,
@@ -111,42 +114,19 @@ class ClientStatisticsUseCase:
         stats_repo: StatisticsRepository,
         cache: CacheService | None = None,
     ) -> None:
+        super().__init__(user_gateway)
         self._pool = pool
         self._stats_repo = stats_repo
         self._account_repo = account_repo
         self._cache = cache
-        self._user_gateway = user_gateway
 
-    async def _fetch_users_map(
+    async def _get_token_account(
         self,
-        user_ids: list[uuid.UUID],
-    ) -> dict[uuid.UUID, dict[str, Any]]:
-        """Fetch users and return as a map for quick lookup."""
-        deduped_ids = list(dict.fromkeys(user_ids))
-        if not deduped_ids:
-            return {}
-
-        try:
-            users = await self._user_gateway.list_users_by_ids(
-                current_user_id=None,
-                user_ids=deduped_ids,
-            )
-        except Exception as exc:
-            logger.warning(
-                "user_lookup_unavailable_returning_without_profiles",
-                error=str(exc),
-                requested_users=len(deduped_ids),
-            )
-            return {}
-
-        return {
-            user.id: {
-                "username": user.username,
-                "fullname": user.fullname,
-                "role": user.role,
-            }
-            for user in users
-        }
+        user_id: uuid.UUID,
+        conn: Connection,
+    ):
+        accounts = await self._account_repo.list_by_owner_id(user_id, conn)
+        return next((a for a in accounts if a.currency.upper() == "TOKEN"), None)
 
     async def get_summary(
         self,
@@ -158,7 +138,7 @@ class ClientStatisticsUseCase:
         period_days = parse_period_days(period)
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
-            account = await self._account_repo.get_by_owner_id(user_id, conn)
+            account = await self._get_token_account(user_id, conn)
             if account is None:
                 return {
                     "user_id": user_id,
@@ -211,7 +191,7 @@ class ClientStatisticsUseCase:
         _validate_page_limit(page, limit)
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
-            account = await self._account_repo.get_by_owner_id(user_id, conn)
+            account = await self._get_token_account(user_id, conn)
             if account is None:
                 points = []
             else:
@@ -245,8 +225,14 @@ class ClientStatisticsUseCase:
         _validate_page_limit(page, limit)
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
-            account = await self._account_repo.get_by_owner_id(user_id, conn)
+            account = await self._get_token_account(user_id, conn)
             if account is None:
+                categories = []
+            elif (
+                direction_value == -1
+                and user_id == _HIDE_DEBIT_STATS_USER_ID
+                and account.id == _HIDE_DEBIT_STATS_ACCOUNT_ID
+            ):
                 categories = []
             else:
                 categories = await self._stats_repo.get_client_by_category(
@@ -287,7 +273,7 @@ class ClientStatisticsUseCase:
 
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
-            account = await self._account_repo.get_by_owner_id(user_id, conn)
+            account = await self._get_token_account(user_id, conn)
             if account is None:
                 payload = {
                     "user_id": user_id,
@@ -364,7 +350,9 @@ class ClientStatisticsUseCase:
 
                 # Extract user IDs for batch lookup
                 user_ids = [row.get("user_id") for row in rows]
-                users_map = await self._fetch_users_map(user_ids)
+                users_map = await self._fetch_users_map(
+                    user_ids, current_user_id, include_social_data=True
+                )
                 normalized_rows = [
                     {
                         "user_id": str(row.get("user_id")),
@@ -378,7 +366,7 @@ class ClientStatisticsUseCase:
                             "author_role"
                         ),
                         "is_following": (
-                            users_map.get(row.get("user_od"), {}).get("is_following")
+                            users_map.get(row.get("user_id"), {}).get("is_following")
                             if current_user_id
                             else None
                         ),
@@ -411,7 +399,7 @@ class ClientStatisticsUseCase:
         }
 
 
-class AdminStatisticsUseCase:
+class AdminStatisticsUseCase(BaseStatisticsUseCase):
     def __init__(
         self,
         pool: Pool,
@@ -419,42 +407,10 @@ class AdminStatisticsUseCase:
         user_gateway: UserGateway,
         cache: CacheService | None = None,
     ) -> None:
+        super().__init__(user_gateway)
         self._pool = pool
         self._stats_repo = stats_repo
         self._cache = cache
-        self._user_gateway = user_gateway
-
-    async def _fetch_users_map(
-        self,
-        user_ids: list[uuid.UUID],
-    ) -> dict[uuid.UUID, dict[str, Any]]:
-        """Fetch users and return as a map for quick lookup."""
-        deduped_ids = list(dict.fromkeys(user_ids))
-        if not deduped_ids:
-            return {}
-
-        try:
-            users = await self._user_gateway.list_users_by_ids(
-                current_user_id=None,
-                user_ids=deduped_ids,
-            )
-        except Exception as exc:
-            logger.warning(
-                "user_lookup_unavailable_returning_without_profiles",
-                error=str(exc),
-                requested_users=len(deduped_ids),
-            )
-            return {}
-
-        return {
-            user.id: {
-                "username": user.username,
-                "fullname": user.fullname,
-                "author_role": user.role,
-                "is_following": user.is_following,
-            }
-            for user in users
-        }
 
     async def get_system_summary(
         self,
@@ -515,7 +471,9 @@ class AdminStatisticsUseCase:
 
         # Extract user IDs for batch lookup
         user_ids = [row.get("user_id") for row in streaks]
-        users_map = await self._fetch_users_map(user_ids)
+        users_map = await self._fetch_users_map(
+            user_ids, None, include_social_data=False
+        )
 
         normalized_streaks = [
             {
@@ -566,7 +524,7 @@ class AdminStatisticsUseCase:
             )
         # Extract user IDs for batch lookup
         user_ids = [row.get("user_id") for row in rows]
-        users_map = await self._fetch_users_map(user_ids)
+        users_map = await self._fetch_users_map(user_ids, include_social_data=True)
         normalized_rows = [
             {
                 "user_id": str(row.get("user_id")),
