@@ -23,6 +23,6 @@ class RoleRequiredValidator(ConditionValidator):
         metadata: dict[str, Any],
         conn: Connection,
     ) -> None:
-        account_role = metadata.get("role", "")
+        account_role = metadata.get("role", "simple")
         if account_role not in value:
             raise RoleNotAllowed(f"Role '{account_role}' not in allowed roles: {value}")

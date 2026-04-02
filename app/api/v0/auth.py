@@ -50,7 +50,9 @@ def _validate_temporal_claims(exp: int, iat: int, leeway_seconds: int) -> None:
 
 async def require_jwt_bearer(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    x_api_key: str | None = Header(default=None, alias="x-api-key"),
+    x_api_key: str | None = Header(
+        default=None, alias="x-api-key", include_in_schema=False
+    ),
 ) -> dict:
     settings = get_settings()
 

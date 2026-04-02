@@ -41,11 +41,11 @@ class CooldownDaysValidator(ConditionValidator):
 
         exists = await conn.fetchval(
             "SELECT created_at FROM transactions "
-            "ORDER BY created_at DESC "
             "WHERE reference_id = $1 "
             "AND reference_type = $2 "
             "AND status = 'completed' "
             "AND created_at >= NOW() - ($3 * INTERVAL '1 day') "
+            "ORDER BY created_at DESC "
             "LIMIT 1",
             str(account.id),
             event_code,

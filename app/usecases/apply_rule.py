@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from asyncpg import Connection, Pool
@@ -75,18 +75,28 @@ class ApplyRuleUseCase:
     async def execute(
         self,
         *,
-        event_code: str,
+        rule_id: uuid.UUID | None = None,
+        event_code: str | None = None,
         user_id: uuid.UUID,
         metadata: dict | None = None,
     ) -> dict | None:
+
         metadata = metadata or {}
-        metadata["event_code"] = event_code
         try:
             async with transaction(self._pool) as conn:
-                rule = await self._fetch_rules(event_code, conn)
+                rule = await self._fetch_rule(
+                    rule_id=rule_id, event_code=event_code, conn=conn
+                )
                 if not rule:
-                    logger.info("no_active_rules", event_code=event_code)
+                    logger.info(
+                        "no_active_rules",
+                        event_code=event_code,
+                        rule_id=str(rule_id) if rule_id else None,
+                    )
                     return None
+
+                event_code = event_code or rule.event_code
+                metadata["event_code"] = event_code
 
                 if self._should_lookup_role(rule, metadata):
                     await self._inject_user_role(
@@ -324,9 +334,140 @@ class ApplyRuleUseCase:
             "results": results,
         }
 
+    async def can_apply(
+        self,
+        *,
+        rule_id: uuid.UUID | None = None,
+        event_code: str | None = None,
+        user_id: uuid.UUID,
+        metadata: dict | None = None,
+    ) -> dict[str, Any]:
+        """Validate whether a rule can be applied without mutating balances/transactions."""
+        metadata = metadata or {}
+
+        async with self._pool.acquire() as conn:
+            rule = await self._fetch_rule(
+                rule_id=rule_id, event_code=event_code, conn=conn
+            )
+            if not rule:
+                return {
+                    "can_apply": False,
+                    "reason": "no_active_rules",
+                    "rule_id": str(rule_id) if rule_id else None,
+                    "event_code": event_code,
+                }
+
+            event_code = event_code or rule.event_code
+            metadata["event_code"] = event_code
+
+            if self._should_lookup_role(rule, metadata):
+                await self._inject_user_role(
+                    current_user_id=user_id,
+                    target_user_id=user_id,
+                    metadata=metadata,
+                )
+
+            account = await self._account_repo.get_by_owner_id(user_id, conn)
+            if account is None:
+                account = Account.create(
+                    user_id=user_id,
+                    currency=(rule.actions or {}).get("currency", "TOKEN"),
+                    owner_type="user",
+                    balance=0,
+                )
+            account.ensure_active()
+
+            rule_idem_key = self._resolve_idem_key(
+                rule, event_code, user_id, account.id, uuid.uuid4().hex, metadata
+            )
+            metadata["idempotency_key"] = rule_idem_key
+
+            try:
+                await self._condition_engine.validate(
+                    rule.conditions, account=account, metadata=metadata, conn=conn
+                )
+            except Exception as exc:
+                return {
+                    "can_apply": False,
+                    "reason": str(exc),
+                    "rule_id": str(rule.id),
+                    "event_code": rule.event_code,
+                }
+
+            actions = rule.actions or {}
+            amount = actions.get("amount", 0)
+            if amount <= 0:
+                target_amounts = actions.get("target_amounts") or {}
+                if isinstance(target_amounts, dict):
+                    target_key = str(metadata.get("target_key") or "user_id")
+                    fallback_amount = target_amounts.get(target_key)
+                    if fallback_amount is None:
+                        fallback_amount = target_amounts.get("user_id")
+                    try:
+                        amount = int(fallback_amount or 0)
+                    except (TypeError, ValueError):
+                        amount = 0
+
+            if amount <= 0:
+                return {
+                    "can_apply": False,
+                    "reason": "amount_not_positive",
+                    "rule_id": str(rule.id),
+                    "event_code": rule.event_code,
+                }
+
+            if await self._is_already_applied(rule.id, rule_idem_key, conn):
+                return {
+                    "can_apply": False,
+                    "reason": "already_applied",
+                    "rule_id": str(rule.id),
+                    "event_code": rule.event_code,
+                }
+            cooldown_days = rule.conditions.get("cooldown_days")
+            possible = {
+                "can_apply": True,
+                "reason": None,
+                "rule_id": str(rule.id),
+                "event_code": rule.event_code,
+                "amount": amount,
+                "currency": actions.get("currency", "TOKEN"),
+                "direction": actions.get("direction", 1),
+            }
+            if cooldown_days is not None:
+                try:
+                    days = int(cooldown_days)
+                    print(f"days-> f{days}")
+                    if days > 0:
+                        expired_at = (
+                            datetime.now(timezone.utc) + timedelta(days=days)
+                        ).isoformat()
+                        possible["expired_at"] = expired_at
+                        print(f"expired_at-> f{str(expired_at)}")
+                except (TypeError, ValueError) as e:
+                    print(e)
+                    pass
+            return possible
+
     # ── Rule fetching (cache → DB) ───────────────────────
 
     async def _fetch_rules(self, event_code: str, conn: Connection) -> Rule | None:
+        return await self._fetch_rule(rule_id=None, event_code=event_code, conn=conn)
+
+    async def _fetch_rule(
+        self,
+        *,
+        rule_id: uuid.UUID | None,
+        event_code: str | None,
+        conn: Connection,
+    ) -> Rule | None:
+        if rule_id is not None:
+            rule = await self._rule_repo.get_by_id(rule_id, conn)
+            if rule is not None and rule.is_usable:
+                return rule
+
+        if not event_code:
+            return None
+
         if self._cache:
             cached = await self._cache.get_cached_rules(event_code)
             if cached is not None:
@@ -529,15 +670,31 @@ class ApplyRuleUseCase:
         await self._transaction_repo.mark_completed(rule_idem_key, conn)
         await self._mark_one_time(rule, account.id, rule_idem_key)
         await self._incr_daily_count(rule, account.id, event_code)
-
-        return {
+        result = {
             "rule_id": str(rule.id),
-            "event_code": event_code,
+            "event_code": rule.event_code,
             "direction": int(direction),
             "amount": amount,
             "currency": actions.get("currency", "TOKEN"),
             "status": "applied",
         }
+        cooldown_days = rule.conditions.get("cooldown_days")
+        print(cooldown_days)
+        if cooldown_days is not None:
+            try:
+                days = int(cooldown_days)
+                print(f"days-> f{days}")
+                if days > 0:
+                    expired_at = (
+                        datetime.now(timezone.utc) + timedelta(days=days)
+                    ).isoformat()
+                    result["expired_at"] = expired_at
+                    print(f"expired_at-> f{str(expired_at)}")
+            except (TypeError, ValueError) as e:
+                print(e)
+                pass
+
+        return result
 
     # ── Idempotency key resolution ───────────────────────
 
