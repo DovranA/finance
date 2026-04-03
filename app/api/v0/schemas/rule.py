@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic import model_validator
 
 from app.api.v0.schemas.general import PaginatedResponse
 
@@ -29,6 +30,8 @@ class RuleAction(BaseModel):
     direction: int = 1  # 1 = credit, -1 = debit
     amount: int = 0
     currency: str = "TOKEN"
+    cost: Optional[int] = None
+    duration_days: Optional[int] = None
     target_users: list[str] | None = None
     target_amounts: dict[str, int] | None = None
 
@@ -82,11 +85,18 @@ RuleLang = Literal["en", "ru", "tk"]
 
 
 class ApplyRuleRequest(BaseModel):
-    event_code: str = Field(min_length=1)
     user_id: uuid.UUID
+    event_code: Optional[str] = None
+    rule_id: Optional[uuid.UUID] = None
     event_id: uuid.UUID | None = uuid.uuid4()
     role: str = "simple"
     metadata: dict[str, Any] | None = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_rule_selector(self) -> ApplyRuleRequest:
+        if self.rule_id is None and not self.event_code:
+            raise ValueError("either rule_id or event_code must be provided")
+        return self
 
 
 class BatchApplyRuleItem(BaseModel):

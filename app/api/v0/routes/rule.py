@@ -1,8 +1,9 @@
 """Rule REST API endpoints — CRUD + event-driven rule application."""
 
+import json
 import uuid
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
 from app.api.v0.schemas.rule import (
@@ -23,7 +24,9 @@ from app.usecases.rule_crud import (
 )
 from app.usecases.apply_rule import ApplyRuleUseCase
 from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
+from app.core.logging import get_logger
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/rules", tags=["Rules"], route_class=DishkaRoute)
 
 
@@ -136,17 +139,58 @@ async def apply_rule(
     uc: FromDishka[ApplyRuleUseCase],
     body: ApplyRuleRequest = Body(...),
 ) -> dict:
-    """Apply a single active rule matching the given event_code to the account."""
+    """Apply a single active rule matching the given rule_id or event_code."""
+
+    logger.info(
+        "apply rule body",
+        rule_id=body.rule_id,
+        event_code=body.event_code,
+        user_id=body.user_id,
+        metadata=body.metadata,
+        role=body.role,
+        event_id=body.event_id,
+    )
     if body.role:
         body.metadata["role"] = body.role
     if body.event_id:
         body.metadata["event_id"] = body.event_id
     result = await uc.execute(
+        rule_id=body.rule_id,
         event_code=body.event_code,
         user_id=body.user_id,
         metadata=body.metadata,
     )
     return {"applied_rule": result, "applied": result is not None}
+
+@router.get("/apply/{rule_id}/{user_id}")
+async def can_apply_rule(
+    rule_id: uuid.UUID,
+    user_id: uuid.UUID,
+    uc: FromDishka[ApplyRuleUseCase],
+    role: str | None = Query(None),
+    event_id: uuid.UUID | None = Query(None),
+    metadata_json: str | None = Query(
+        None,
+        description="Optional JSON object with metadata keys required by the rule",
+    ),
+) -> dict:
+    """Check whether the given user can apply the specified rule right now."""
+    metadata: dict = {}
+    if metadata_json:
+        try:
+            parsed = json.loads(metadata_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail="metadata_json must be valid JSON") from exc
+        if not isinstance(parsed, dict):
+            raise HTTPException(status_code=422, detail="metadata_json must be a JSON object")
+        metadata = parsed
+
+    if role:
+        metadata["role"] = role
+    if event_id:
+        metadata["event_id"] = str(event_id)
+
+    return await uc.can_apply(rule_id=rule_id, user_id=user_id, metadata=metadata)
 
 
 @router.post("/apply/batch", response_model=BatchApplyRuleResponse)
