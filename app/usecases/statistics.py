@@ -235,9 +235,9 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                         )
                     )
 
-        aggregated_categories: dict[tuple[str | None, str | None, int | None], dict] = (
-            {}
-        )
+        aggregated_categories: dict[
+            tuple[str | None, str | None, int | None, str | None], dict
+        ] = {}
         for c in categories:
             description_i18n = c.get("description_i18n")
             if isinstance(description_i18n, str):
@@ -249,6 +249,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                 c.get("rule_id"),
                 c.get("event_code") or c.get("category"),
                 c.get("direction"),
+                c.get("currency"),
             )
             if key not in aggregated_categories:
                 aggregated_categories[key] = {
@@ -256,6 +257,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     "event_code": c.get("event_code") or c.get("category"),
                     "description_i18n": description_i18n,
                     "direction": c.get("direction"),
+                    "currency": c.get("currency"),
                     "amount": 0,
                     "transaction_count": 0,
                 }
@@ -274,6 +276,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     "event_code": c.get("event_code") or c.get("category"),
                     "description_i18n": c.get("description_i18n") or {},
                     "direction": c.get("direction"),
+                    "currency": c.get("currency"),
                     "amount": int(c.get("amount") or 0),
                     "transaction_count": int(c.get("transaction_count") or 0),
                 }

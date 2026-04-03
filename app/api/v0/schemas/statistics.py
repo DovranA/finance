@@ -47,6 +47,7 @@ class ClientCategoryPoint(BaseModel):
     event_code: str | None = None
     description_i18n: dict[str, str] | None = None
     direction: int | None = None
+    currency: str | None = None
     amount: int
     transaction_count: int
 
