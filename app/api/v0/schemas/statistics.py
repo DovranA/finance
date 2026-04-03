@@ -1,6 +1,7 @@
 """Request/response schemas for statistics endpoints."""
 
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -42,11 +43,11 @@ class ClientStatsTimelinePaginatedResponse(
 
 
 class ClientCategoryPoint(BaseModel):
+    rule_id: str | None = None
     event_code: str | None = None
     description_i18n: dict[str, str] | None = None
-    credits: int
-    debits: int
-    net: int
+    direction: int | None = None
+    amount: int
     transaction_count: int
 
 

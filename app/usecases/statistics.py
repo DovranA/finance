@@ -21,8 +21,6 @@ from app.usecases.statistics_base import BaseStatisticsUseCase
 logger = get_logger(__name__)
 
 _PERIOD_RE = re.compile(r"^(\d+)d$")
-_HIDE_DEBIT_STATS_USER_ID = uuid.UUID("5517c5c1-5dd0-4239-aca2-6d7db037c484")
-_HIDE_DEBIT_STATS_ACCOUNT_ID = uuid.UUID("cb24541c-d98a-4f62-92c1-9ecd33158355")
 
 
 def parse_period_days(period: str) -> int:
@@ -225,20 +223,21 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
         _validate_page_limit(page, limit)
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
-            account = await self._get_token_account(user_id, conn)
-            if account is None:
-                categories = []
-            elif (
-                direction_value == -1
-                and user_id == _HIDE_DEBIT_STATS_USER_ID
-                and account.id == _HIDE_DEBIT_STATS_ACCOUNT_ID
-            ):
+            accounts = await self._account_repo.list_by_owner_id(user_id, conn)
+            if not accounts:
                 categories = []
             else:
-                categories = await self._stats_repo.get_client_by_category(
-                    account.id, period_days, direction_value, conn
-                )
-        normalized_categories = []
+                categories = []
+                for account in accounts:
+                    categories.extend(
+                        await self._stats_repo.get_client_by_category(
+                            account.id, period_days, direction_value, conn
+                        )
+                    )
+
+        aggregated_categories: dict[tuple[str | None, str | None, int | None], dict] = (
+            {}
+        )
         for c in categories:
             description_i18n = c.get("description_i18n")
             if isinstance(description_i18n, str):
@@ -246,16 +245,46 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
             if not isinstance(description_i18n, dict):
                 description_i18n = {}
 
-            normalized_categories.append(
-                {
+            key = (
+                c.get("rule_id"),
+                c.get("event_code") or c.get("category"),
+                c.get("direction"),
+            )
+            if key not in aggregated_categories:
+                aggregated_categories[key] = {
+                    "rule_id": c.get("rule_id"),
                     "event_code": c.get("event_code") or c.get("category"),
                     "description_i18n": description_i18n,
-                    "credits": int(c.get("credits") or 0),
-                    "debits": int(c.get("debits") or 0),
-                    "net": int(c.get("net") or 0),
+                    "direction": c.get("direction"),
+                    "amount": 0,
+                    "transaction_count": 0,
+                }
+
+            aggregated_categories[key]["amount"] += int(c.get("amount") or 0)
+            aggregated_categories[key]["transaction_count"] += int(
+                c.get("transaction_count") or 0
+            )
+
+        normalized_categories = []
+        for c in aggregated_categories.values():
+
+            normalized_categories.append(
+                {
+                    "rule_id": c.get("rule_id"),
+                    "event_code": c.get("event_code") or c.get("category"),
+                    "description_i18n": c.get("description_i18n") or {},
+                    "direction": c.get("direction"),
+                    "amount": int(c.get("amount") or 0),
                     "transaction_count": int(c.get("transaction_count") or 0),
                 }
             )
+
+        normalized_categories.sort(
+            key=lambda item: (
+                -int(item.get("amount") or 0),
+                str(item.get("rule_id") or ""),
+            )
+        )
 
         return _paginate_items(items=normalized_categories, page=page, limit=limit)
 
