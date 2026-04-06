@@ -49,6 +49,7 @@ class CreateRuleRequest(BaseModel):
     description_i18n: RuleDescriptionI18n | None = None
     conditions: RuleCondition = Field(default_factory=dict)
     actions: RuleAction = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
     priority: int = 0
     expired_at: datetime | None = None
 
@@ -59,6 +60,7 @@ class UpdateRuleRequest(BaseModel):
     description_i18n: RuleDescriptionI18n | None = None
     conditions: dict[str, Any] | None = None
     actions: dict[str, Any] | None = None
+    tags: list[str] | None = None
     priority: int | None = None
     is_active: bool | None = None
     expired_at: datetime | None = None
@@ -70,6 +72,7 @@ class RuleResponse(BaseModel):
     description_i18n: RuleDescriptionI18n | None = None
     conditions: dict[str, Any]
     actions: dict[str, Any]
+    tags: list[str]
     priority: int
     is_active: bool
     expired_at: datetime | None

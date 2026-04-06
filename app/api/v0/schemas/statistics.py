@@ -46,6 +46,7 @@ class ClientCategoryPoint(BaseModel):
     rule_id: str | None = None
     event_code: str | None = None
     description_i18n: dict[str, str] | None = None
+    tags: list[str] = Field(default_factory=list)
     direction: int | None = None
     currency: str | None = None
     amount: int

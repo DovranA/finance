@@ -28,11 +28,15 @@ class RuleRepository(ABC):
 
     @abstractmethod
     async def list_all(
-        self, conn: Connection, limit: int = 50, offset: int = 0
+        self,
+        conn: Connection,
+        limit: int = 50,
+        offset: int = 0,
+        tags: list[str] | None = None,
     ) -> list[Rule]: ...
 
     @abstractmethod
-    async def count(self, conn: Connection) -> int: ...
+    async def count(self, conn: Connection, tags: list[str] | None = None) -> int: ...
 
     @abstractmethod
     async def create(self, rule: Rule, conn: Connection) -> None: ...

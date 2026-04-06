@@ -33,6 +33,7 @@ class CreateRuleUseCase:
         event_code: str,
         conditions: dict | None = None,
         actions: dict | None = None,
+        tags: list[str] | None = None,
         description_i18n: dict[str, str] | None = None,
         priority: int = 0,
         expired_at: datetime | None = None,
@@ -42,6 +43,7 @@ class CreateRuleUseCase:
             event_code=event_code,
             conditions=conditions,
             actions=actions,
+            tags=tags,
             description_i18n=description_i18n,
             priority=priority,
             expired_at=expired_at,
@@ -81,11 +83,14 @@ class ListRulesUseCase:
         *,
         limit: int = 50,
         page: int = 1,
+        tags: list[str] | None = None,
     ) -> list[Rule]:
         async with transaction(self._pool) as conn:
             offset = max(page - 1, 0) * limit
-            result = await self._rule_repo.list_all(conn, limit=limit, offset=offset)
-            total_count = await self._rule_repo.count(conn)
+            result = await self._rule_repo.list_all(
+                conn, limit=limit, offset=offset, tags=tags
+            )
+            total_count = await self._rule_repo.count(conn, tags=tags)
             total_pages = (total_count + limit - 1) // limit
             page_info = {
                 "has_next_page": page < total_pages,
@@ -115,6 +120,7 @@ class UpdateRuleUseCase:
         actions: dict | None = None,
         description: str | None = None,
         description_i18n: dict[str, str] | None = None,
+        tags: list[str] | None = None,
         priority: int | None = None,
         is_active: bool | None = None,
         expired_at: datetime | None = None,
@@ -130,6 +136,8 @@ class UpdateRuleUseCase:
                 rule.conditions = conditions
             if actions is not None:
                 rule.actions = actions
+            if tags is not None:
+                rule.tags = tags
             if description is not None:
                 rule.description = description
             if description_i18n is not None:

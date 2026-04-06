@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS rules (
     description TEXT,
     conditions JSONB NOT NULL DEFAULT '{}',
     actions JSONB NOT NULL DEFAULT '{}',
+    tags TEXT [] NOT NULL DEFAULT ARRAY[]::text [],
     priority INT NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     expired_at TIMESTAMPTZ,
@@ -26,6 +27,7 @@ INSERT INTO
         description,
         conditions,
         actions,
+        tags,
         priority,
         expired_at
     )
@@ -34,6 +36,7 @@ VALUES (
         'Official event — debit with min balance check',
         '{"min_balance": 1000}'::jsonb,
         '{"direction": -1, "currency": "TOKEN", "amount":1000}'::jsonb,
+        ARRAY['official']::text [],
         10,
         NOW() + INTERVAL '30 days'
     )
@@ -47,6 +50,7 @@ INSERT INTO
         description,
         conditions,
         actions,
+        tags,
         priority
     )
 VALUES (
@@ -54,6 +58,7 @@ VALUES (
         'Repost event — credit reward with role check',
         '{"role_required": ["official", "simple"]}'::jsonb,
         '{"direction": 1, "currency": "TOKEN", "amount": 3}'::jsonb,
+        ARRAY['social']::text [],
         10
     )
 ON CONFLICT (event_code) DO NOTHING;

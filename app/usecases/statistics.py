@@ -218,6 +218,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
         page: int = 1,
         limit: int = 20,
         direction: Literal["credit", "debit"] | None = None,
+        tags: list[str] | None = None,
     ) -> dict:
         period_days = parse_period_days(period)
         _validate_page_limit(page, limit)
@@ -231,7 +232,11 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                 for account in accounts:
                     categories.extend(
                         await self._stats_repo.get_client_by_category(
-                            account.id, period_days, direction_value, conn
+                            account.id,
+                            period_days,
+                            direction_value,
+                            conn,
+                            tags=tags,
                         )
                     )
 
@@ -256,6 +261,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     "rule_id": c.get("rule_id"),
                     "event_code": c.get("event_code") or c.get("category"),
                     "description_i18n": description_i18n,
+                    "tags": list(c.get("tags") or []),
                     "direction": c.get("direction"),
                     "currency": c.get("currency"),
                     "amount": 0,
@@ -275,6 +281,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     "rule_id": c.get("rule_id"),
                     "event_code": c.get("event_code") or c.get("category"),
                     "description_i18n": c.get("description_i18n") or {},
+                    "tags": list(c.get("tags") or []),
                     "direction": c.get("direction"),
                     "currency": c.get("currency"),
                     "amount": int(c.get("amount") or 0),
