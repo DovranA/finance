@@ -143,17 +143,17 @@ async def apply_rule(
 
     logger.info(
         "apply rule body",
-        rule_id=body.rule_id,
+        rule_id=str(body.rule_id) if body.rule_id else None,
         event_code=body.event_code,
-        user_id=body.user_id,
+        user_id=str(body.user_id),
         metadata=body.metadata,
         role=body.role,
-        event_id=body.event_id,
+        event_id=str(body.event_id) if body.event_id else None,
     )
     if body.role:
         body.metadata["role"] = body.role
     if body.event_id:
-        body.metadata["event_id"] = body.event_id
+        body.metadata["event_id"] = str(body.event_id)
     result = await uc.execute(
         rule_id=body.rule_id,
         event_code=body.event_code,
@@ -161,6 +161,7 @@ async def apply_rule(
         metadata=body.metadata,
     )
     return {"applied_rule": result, "applied": result is not None}
+
 
 @router.get("/apply/{rule_id}/{user_id}")
 async def can_apply_rule(
@@ -180,9 +181,13 @@ async def can_apply_rule(
         try:
             parsed = json.loads(metadata_json)
         except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=422, detail="metadata_json must be valid JSON") from exc
+            raise HTTPException(
+                status_code=422, detail="metadata_json must be valid JSON"
+            ) from exc
         if not isinstance(parsed, dict):
-            raise HTTPException(status_code=422, detail="metadata_json must be a JSON object")
+            raise HTTPException(
+                status_code=422, detail="metadata_json must be a JSON object"
+            )
         metadata = parsed
 
     if role:

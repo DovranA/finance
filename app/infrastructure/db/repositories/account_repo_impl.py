@@ -29,23 +29,45 @@ class PgAccountRepository(AccountRepository):
         return self._to_entity(row) if row else None
 
     async def get_by_owner_id_for_update(
-        self, user_id: uuid.UUID, conn: Connection
+        self,
+        user_id: uuid.UUID,
+        conn: Connection,
+        currency: str | None = None,
     ) -> Account | None:
-        row = await conn.fetchrow(
-            f"SELECT {_SELECT_COLS} FROM accounts "
-            "WHERE user_id = $1 AND is_active = TRUE FOR UPDATE",
-            user_id,
-        )
+        if currency is not None:
+            row = await conn.fetchrow(
+                f"SELECT {_SELECT_COLS} FROM accounts "
+                "WHERE user_id = $1 AND is_active = TRUE AND currency = $2 FOR UPDATE",
+                user_id,
+                currency,
+            )
+        else:
+            row = await conn.fetchrow(
+                f"SELECT {_SELECT_COLS} FROM accounts "
+                "WHERE user_id = $1 AND is_active = TRUE ORDER BY currency FOR UPDATE",
+                user_id,
+            )
         return self._to_entity(row) if row else None
 
     async def get_by_owner_id(
-        self, user_id: uuid.UUID, conn: Connection
+        self,
+        user_id: uuid.UUID,
+        conn: Connection,
+        currency: str | None = None,
     ) -> Account | None:
-        row = await conn.fetchrow(
-            f"SELECT {_SELECT_COLS} FROM accounts "
-            "WHERE user_id = $1 AND is_active = TRUE ORDER BY currency",
-            user_id,
-        )
+        if currency is not None:
+            row = await conn.fetchrow(
+                f"SELECT {_SELECT_COLS} FROM accounts "
+                "WHERE user_id = $1 AND is_active = TRUE AND currency = $2",
+                user_id,
+                currency,
+            )
+        else:
+            row = await conn.fetchrow(
+                f"SELECT {_SELECT_COLS} FROM accounts "
+                "WHERE user_id = $1 AND is_active = TRUE ORDER BY currency",
+                user_id,
+            )
         return self._to_entity(row) if row else None
 
     async def list_by_owner_id(

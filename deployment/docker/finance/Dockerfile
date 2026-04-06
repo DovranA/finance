@@ -5,7 +5,7 @@ WORKDIR /build
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt -i https://mirrors.sustech.edu.cn/pypi/web/simple
 
 # ── Runtime Stage ────────────────────────────────────────────
 FROM container.tmbiz.info/hub/python:3.14-slim
