@@ -27,6 +27,7 @@ class Rule:
     expired_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    tags: list[str] = field(default_factory=list)
 
     # ── Convenience helpers ──────────────────────────────────
 
@@ -47,6 +48,7 @@ class Rule:
         event_code: str,
         conditions: dict[str, Any] | None = None,
         actions: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
         description_i18n: dict[str, str] | None = None,
         priority: int = 0,
         expired_at: datetime | None = None,
@@ -58,6 +60,7 @@ class Rule:
             description_i18n=description_i18n,
             conditions=conditions or {},
             actions=actions or {},
+            tags=tags or [],
             priority=priority,
             is_active=True,
             expired_at=expired_at,

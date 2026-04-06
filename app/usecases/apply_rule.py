@@ -83,6 +83,16 @@ class ApplyRuleUseCase:
 
         metadata = metadata or {}
         try:
+            approval_action = str(metadata.get("approval_action") or "").strip().lower()
+            if approval_action in {"approve", "reject"}:
+                async with transaction(self._pool) as conn:
+                    return await self._handle_official_approval_action(
+                        action=approval_action,
+                        requested_user_id=user_id,
+                        metadata=metadata,
+                        conn=conn,
+                    )
+
             async with transaction(self._pool) as conn:
                 rule = await self._fetch_rule(
                     rule_id=rule_id, event_code=event_code, conn=conn
@@ -426,6 +436,34 @@ class ApplyRuleUseCase:
                     "event_code": rule.event_code,
                 }
 
+            if self._requires_admin_approval(rule, metadata):
+                existing = await self._transaction_repo.get_by_key(rule_idem_key, conn)
+                if existing is not None:
+                    if existing.status == "pending":
+                        return {
+                            "can_apply": False,
+                            "reason": "pending_approval",
+                            "rule_id": str(rule.id),
+                            "event_code": rule.event_code,
+                            "amount": amount,
+                            "currency": actions.get("currency", "TOKEN"),
+                            "direction": actions.get("direction", 1),
+                            "approval_required": True,
+                        }
+                    if existing.status == "completed":
+                        return {
+                            "can_apply": False,
+                            "reason": "already_applied",
+                            "rule_id": str(rule.id),
+                            "event_code": rule.event_code,
+                        }
+                    return {
+                        "can_apply": False,
+                        "reason": "rejected",
+                        "rule_id": str(rule.id),
+                        "event_code": rule.event_code,
+                    }
+
             if await self._is_already_applied(rule.id, rule_idem_key, conn):
                 return {
                     "can_apply": False,
@@ -443,6 +481,8 @@ class ApplyRuleUseCase:
                 "currency": actions.get("currency", "TOKEN"),
                 "direction": actions.get("direction", 1),
             }
+            if self._requires_admin_approval(rule, metadata):
+                possible["approval_required"] = True
             if cooldown_days is not None:
                 try:
                     days = int(cooldown_days)
@@ -498,6 +538,7 @@ class ApplyRuleUseCase:
                 description_i18n=r.get("description_i18n"),
                 conditions=_ensure_dict(r.get("conditions", {})),
                 actions=_ensure_dict(r.get("actions", {})),
+                tags=list(r.get("tags") or []),
                 priority=r.get("priority", 0),
                 is_active=r.get("is_active", True),
                 expired_at=(
@@ -521,6 +562,7 @@ class ApplyRuleUseCase:
                 "description_i18n": r.description_i18n or {},
                 "conditions": r.conditions,
                 "actions": r.actions,
+                "tags": r.tags,
                 "priority": r.priority,
                 "is_active": r.is_active,
                 "expired_at": r.expired_at.isoformat() if r.expired_at else None,
@@ -658,6 +700,66 @@ class ApplyRuleUseCase:
         if amount <= 0:
             return None
 
+        if self._requires_admin_approval(rule, metadata):
+            existing = await self._transaction_repo.get_by_key(rule_idem_key, conn)
+            if existing is not None:
+                if existing.status == "failed":
+                    return None
+                return self._official_request_result(
+                    rule=rule,
+                    amount=amount,
+                    direction=direction,
+                    transaction=existing,
+                    status=(
+                        "applied"
+                        if existing.status == "completed"
+                        else "pending_approval"
+                    ),
+                )
+
+            is_debit_direction = direction == LedgerDirection.DIRECTION_DEBIT
+            tx = Transaction.create(
+                idempotency_key=rule_idem_key,
+                reference_type=event_code,
+                reference_id=str(account.id),
+                metadata={
+                    "rule_id": str(rule.id),
+                    "event_code": event_code,
+                    "request_type": "official_approval",
+                    "approval_required": True,
+                    "user_id": str(user_id),
+                    "account_id": str(account.id),
+                    "amount": amount,
+                    "currency": actions.get("currency", "TOKEN"),
+                    "direction": int(direction),
+                    "funds_reserved": is_debit_direction,
+                    **metadata,
+                },
+                status="pending",
+            )
+            await self._transaction_repo.save(tx, conn)
+
+            if is_debit_direction:
+                # Reserve user funds immediately; approve/reject decides final settlement.
+                await self._account_repo.debit(account.id, amount, conn)
+                await self._ledger_repo.insert(
+                    LedgerEntry.create(
+                        account_id=account.id,
+                        transaction_id=tx.id,
+                        amount=amount,
+                        direction=LedgerDirection.DIRECTION_DEBIT,
+                    ),
+                    conn,
+                )
+
+            return self._official_request_result(
+                rule=rule,
+                amount=amount,
+                direction=direction,
+                transaction=tx,
+                status="pending_approval",
+            )
+
         if await self._is_already_applied(rule.id, rule_idem_key, conn):
             return None
 
@@ -698,6 +800,171 @@ class ApplyRuleUseCase:
                 pass
 
         return result
+
+    @staticmethod
+    def _requires_admin_approval(rule: Rule, metadata: dict[str, Any]) -> bool:
+        actions = rule.actions or {}
+        if metadata.get("requires_approval") is True:
+            return True
+        return actions.get("requires_approval") is True
+
+    @staticmethod
+    def _official_request_result(
+        *,
+        rule: Rule,
+        amount: int,
+        direction: LedgerDirection,
+        transaction: Transaction,
+        status: str,
+    ) -> dict[str, Any]:
+        actions = rule.actions or {}
+        return {
+            "rule_id": str(rule.id),
+            "event_code": rule.event_code,
+            "direction": int(direction),
+            "amount": amount,
+            "currency": actions.get("currency", "TOKEN"),
+            "status": status,
+            "request_id": str(transaction.id),
+            "idempotency_key": transaction.idempotency_key,
+            "approval_required": True,
+        }
+
+    async def _handle_official_approval_action(
+        self,
+        *,
+        action: str,
+        requested_user_id: uuid.UUID,
+        metadata: dict[str, Any],
+        conn: Connection,
+    ) -> dict[str, Any]:
+        request_id_raw = metadata.get("request_id")
+        request_id = self._parse_uuid(request_id_raw)
+        if request_id is None:
+            raise DomainError("request_id is required for approval_action")
+
+        tx = await self._transaction_repo.get_by_id(request_id, conn)
+        if tx is None:
+            raise DomainError("official request not found")
+
+        tx_meta = tx.metadata or {}
+        if not tx_meta.get("approval_required"):
+            raise DomainError("transaction is not an approval request")
+
+        tx_user_id = self._parse_uuid(tx_meta.get("user_id"))
+        if tx_user_id is None:
+            raise DomainError("invalid approval request payload")
+        if tx_user_id != requested_user_id:
+            raise DomainError("user_id does not match request owner")
+
+        currency = str(tx_meta.get("currency") or "TOKEN")
+        amount = int(tx_meta.get("amount") or 0)
+        if amount <= 0:
+            raise DomainError("official request amount must be positive")
+
+        direction_value = int(
+            tx_meta.get("direction") or LedgerDirection.DIRECTION_DEBIT
+        )
+        direction = LedgerDirection(direction_value)
+        funds_reserved = bool(tx_meta.get("funds_reserved"))
+
+        if tx.status == "completed":
+            if action == "approve":
+                return self._official_approval_action_result(tx, "approved")
+            raise DomainError("official request already approved")
+
+        if tx.status == "failed":
+            if action == "reject":
+                return self._official_approval_action_result(tx, "rejected")
+            raise DomainError("official request already rejected")
+
+        if action == "reject":
+            if funds_reserved and direction == LedgerDirection.DIRECTION_DEBIT:
+                account_id = self._parse_uuid(tx_meta.get("account_id"))
+                if account_id is None:
+                    raise DomainError("invalid approval request account")
+
+                account = await self._account_repo.get_for_update(account_id, conn)
+                if account is None:
+                    raise AccountNotFound(f"Account {account_id} not found")
+
+                await self._account_repo.credit(account.id, amount, conn)
+                await self._ledger_repo.insert(
+                    LedgerEntry.create(
+                        account_id=account.id,
+                        transaction_id=tx.id,
+                        amount=amount,
+                        direction=LedgerDirection.DIRECTION_CREDIT,
+                    ),
+                    conn,
+                )
+
+            await self._transaction_repo.mark_failed(tx.idempotency_key, conn)
+            return self._official_approval_action_result(tx, "rejected")
+
+        treasury = await self._account_repo.get_by_account_type(
+            AccountTypes.TREASURY,
+            conn,
+            currency,
+        )
+        if treasury is None:
+            raise AccountNotFound(
+                f"Treasury account not found for currency '{currency}'"
+            )
+
+        if direction == LedgerDirection.DIRECTION_DEBIT:
+            if not funds_reserved:
+                account = await self._account_repo.get_by_owner_id_for_update(
+                    tx_user_id,
+                    conn,
+                    currency=currency,
+                )
+                if account is None:
+                    raise AccountNotFound(
+                        f"Account {tx_user_id} ({currency}) not found"
+                    )
+                account.ensure_active()
+
+                await self._account_repo.debit(account.id, amount, conn)
+                await self._ledger_repo.insert(
+                    LedgerEntry.create(
+                        account_id=account.id,
+                        transaction_id=tx.id,
+                        amount=amount,
+                        direction=LedgerDirection.DIRECTION_DEBIT,
+                    ),
+                    conn,
+                )
+
+            await self._account_repo.credit(treasury.id, amount, conn)
+            await self._ledger_repo.insert(
+                LedgerEntry.create(
+                    account_id=treasury.id,
+                    transaction_id=tx.id,
+                    amount=amount,
+                    direction=LedgerDirection.DIRECTION_CREDIT,
+                ),
+                conn,
+            )
+
+        await self._transaction_repo.mark_completed(tx.idempotency_key, conn)
+        return self._official_approval_action_result(tx, "approved")
+
+    @staticmethod
+    def _official_approval_action_result(
+        tx: Transaction, status: str
+    ) -> dict[str, Any]:
+        metadata = tx.metadata or {}
+        return {
+            "request_id": str(tx.id),
+            "idempotency_key": tx.idempotency_key,
+            "status": status,
+            "user_id": metadata.get("user_id"),
+            "amount": metadata.get("amount"),
+            "currency": metadata.get("currency", "TOKEN"),
+            "event_code": metadata.get("event_code"),
+            "approval_required": bool(metadata.get("approval_required")),
+        }
 
     # ── Idempotency key resolution ───────────────────────
 

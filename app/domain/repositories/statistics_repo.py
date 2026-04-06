@@ -38,6 +38,7 @@ class StatisticsRepository(ABC):
         period_days: int,
         direction: int | None,
         conn: Connection,
+        tags: list[str] | None = None,
     ) -> list[dict[str, Any]]: ...
 
     @abstractmethod

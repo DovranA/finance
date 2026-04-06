@@ -1,4 +1,6 @@
-from asyncpg import Connection, Pool
+import uuid
+
+from asyncpg import Pool
 
 from app.domain.entities.account import Account
 from app.domain.exceptions import AccountNotFound

@@ -80,6 +80,7 @@ async def client_by_category(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
+    tags: list[str] | None = Query(None),
 ) -> ClientStatsByCategoryPaginatedResponse:
     result = await uc.get_by_category(
         user_id=user_id,
@@ -87,6 +88,7 @@ async def client_by_category(
         page=page,
         limit=limit,
         direction=direction,
+        tags=tags,
     )
     return ClientStatsByCategoryPaginatedResponse(**result)
 
@@ -160,6 +162,7 @@ async def owner_by_category(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
+    tags: list[str] | None = Query(None),
 ) -> ClientStatsByCategoryPaginatedResponse:
     result = await uc.get_by_category(
         user_id=user_id,
@@ -167,6 +170,7 @@ async def owner_by_category(
         page=page,
         limit=limit,
         direction=direction,
+        tags=tags,
     )
     return ClientStatsByCategoryPaginatedResponse(**result)
 

@@ -74,30 +74,40 @@ class PgStatisticsRepository(StatisticsRepository):
         period_days: int,
         direction: int | None,
         conn: Connection,
+        tags: list[str] | None = None,
     ) -> list[dict[str, Any]]:
+        tag_filter_sql = ""
+        tag_params: tuple[Any, ...] = ()
+        if tags:
+            tag_filter_sql = " AND r.tags && $4::text[]"
+            tag_params = (tags,)
+
         rows = await conn.fetch(
-            """
+            f"""
             SELECT
                 r.id::text AS rule_id,
                 r.event_code AS event_code,
-                COALESCE(r.description_i18n, '{}'::jsonb) AS description_i18n,
+                COALESCE(r.description_i18n, '{{}}'::jsonb) AS description_i18n,
+                COALESCE(r.tags, ARRAY[]::text[]) AS tags,
                 COALESCE((r.actions ->> 'direction')::SMALLINT, le.direction) AS direction,
-                                a.currency AS currency,
+                a.currency AS currency,
                 COALESCE(SUM(le.amount), 0) AS amount,
                 COALESCE(COUNT(DISTINCT le.transaction_id), 0) AS transaction_count
             FROM ledger_entries le
-                        JOIN accounts a ON a.id = le.account_id
+            JOIN accounts a ON a.id = le.account_id
             JOIN transactions t ON t.id = le.transaction_id
             JOIN rules r ON r.id::text = (t.metadata ->> 'rule_id')
             WHERE le.account_id = $1
               AND le.created_at >= NOW() - ($2 * INTERVAL '1 day')
               AND ($3::SMALLINT IS NULL OR COALESCE((r.actions ->> 'direction')::SMALLINT, le.direction) = $3)
-                        GROUP BY 1, 2, 3, 4, 5
+              {tag_filter_sql}
+            GROUP BY 1, 2, 3, 4, 5, 6
             ORDER BY amount DESC, rule_id ASC
             """,
             account_id,
             period_days,
             direction,
+            *tag_params,
         )
         return [dict(r) for r in rows]
 

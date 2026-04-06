@@ -39,6 +39,7 @@ async def create_rule(
         event_code=data.event_code,
         conditions=data.conditions.model_dump(exclude_none=True),
         actions=data.actions.model_dump(exclude_none=True),
+        tags=data.tags,
         description_i18n=(
             data.description_i18n.model_dump(exclude_none=True)
             if data.description_i18n
@@ -53,6 +54,7 @@ async def create_rule(
         description_i18n=rule.description_i18n,
         conditions=rule.conditions,
         actions=rule.actions,
+        tags=rule.tags,
         priority=rule.priority,
         is_active=rule.is_active,
         expired_at=rule.expired_at,
@@ -73,6 +75,7 @@ async def get_rule(
         description_i18n=rule.description_i18n,
         conditions=rule.conditions,
         actions=rule.actions,
+        tags=rule.tags,
         priority=rule.priority,
         is_active=rule.is_active,
         expired_at=rule.expired_at,
@@ -86,8 +89,9 @@ async def list_rules(
     uc: FromDishka[ListRulesUseCase],
     limit: int = Query(50, ge=1, le=200),
     page: int = Query(1, ge=1),
+    tags: list[str] | None = Query(None),
 ) -> RuleListResponse:
-    return await uc.execute(limit=limit, page=page)
+    return await uc.execute(limit=limit, page=page, tags=tags)
 
 
 @router.patch("/{rule_id}", response_model=RuleResponse)
@@ -101,6 +105,7 @@ async def update_rule(
         event_code=data.event_code,
         conditions=data.conditions,
         actions=data.actions,
+        tags=data.tags,
         description=data.description,
         description_i18n=(
             data.description_i18n.model_dump(exclude_none=True)
@@ -117,6 +122,7 @@ async def update_rule(
         description_i18n=rule.description_i18n,
         conditions=rule.conditions,
         actions=rule.actions,
+        tags=rule.tags,
         priority=rule.priority,
         is_active=rule.is_active,
         expired_at=rule.expired_at,
@@ -160,7 +166,11 @@ async def apply_rule(
         user_id=body.user_id,
         metadata=body.metadata,
     )
-    return {"applied_rule": result, "applied": result is not None}
+    return {
+        "applied_rule": result,
+        "applied": bool(result and result.get("status") == "applied"),
+        "pending": bool(result and result.get("status") == "pending_approval"),
+    }
 
 
 @router.get("/apply/{rule_id}/{user_id}")
