@@ -98,6 +98,8 @@ class ApplyRuleUseCase:
                 event_code = event_code or rule.event_code
                 metadata["event_code"] = event_code
 
+                rule_currency = (rule.actions or {}).get("currency", "TOKEN")
+
                 if self._should_lookup_role(rule, metadata):
                     await self._inject_user_role(
                         current_user_id=user_id,
@@ -105,10 +107,11 @@ class ApplyRuleUseCase:
                         metadata=metadata,
                     )
 
-                account = await self._get_or_create_account_for_update(user_id, conn)
+                account = await self._get_or_create_account_for_update(
+                    user_id, conn, currency=rule_currency
+                )
                 account.ensure_active()
 
-                rule_currency = (rule.actions or {}).get("currency", account.currency)
                 treasury = await self._account_repo.get_by_account_type(
                     AccountTypes.TREASURY,
                     conn,
@@ -231,7 +234,9 @@ class ApplyRuleUseCase:
                             account = accounts_cache[user_id]
                         else:
                             account = await self._get_or_create_account_for_update(
-                                user_id, conn
+                                user_id,
+                                conn,
+                                currency=rule_currency,
                             )
                             accounts_cache[user_id] = account
 
@@ -367,11 +372,16 @@ class ApplyRuleUseCase:
                     metadata=metadata,
                 )
 
-            account = await self._account_repo.get_by_owner_id(user_id, conn)
+            account_currency = (rule.actions or {}).get("currency", "TOKEN")
+            account = await self._account_repo.get_by_owner_id(
+                user_id,
+                conn,
+                currency=account_currency,
+            )
             if account is None:
                 account = Account.create(
                     user_id=user_id,
-                    currency=(rule.actions or {}).get("currency", "TOKEN"),
+                    currency=account_currency,
                     owner_type="user",
                     balance=0,
                 )
@@ -436,15 +446,12 @@ class ApplyRuleUseCase:
             if cooldown_days is not None:
                 try:
                     days = int(cooldown_days)
-                    print(f"days-> f{days}")
                     if days > 0:
                         expired_at = (
                             datetime.now(timezone.utc) + timedelta(days=days)
                         ).isoformat()
                         possible["expired_at"] = expired_at
-                        print(f"expired_at-> f{str(expired_at)}")
-                except (TypeError, ValueError) as e:
-                    print(e)
+                except (TypeError, ValueError):
                     pass
             return possible
 
@@ -679,19 +686,15 @@ class ApplyRuleUseCase:
             "status": "applied",
         }
         cooldown_days = rule.conditions.get("cooldown_days")
-        print(cooldown_days)
         if cooldown_days is not None:
             try:
                 days = int(cooldown_days)
-                print(f"days-> f{days}")
                 if days > 0:
                     expired_at = (
                         datetime.now(timezone.utc) + timedelta(days=days)
                     ).isoformat()
                     result["expired_at"] = expired_at
-                    print(f"expired_at-> f{str(expired_at)}")
-            except (TypeError, ValueError) as e:
-                print(e)
+            except (TypeError, ValueError):
                 pass
 
         return result
@@ -770,23 +773,35 @@ class ApplyRuleUseCase:
         return False
 
     async def _get_or_create_account_for_update(
-        self, user_id: uuid.UUID, conn: Connection
+        self,
+        user_id: uuid.UUID,
+        conn: Connection,
+        currency: str = "TOKEN",
     ) -> Account:
-        account = await self._account_repo.get_by_owner_id_for_update(user_id, conn)
+        account = await self._account_repo.get_by_owner_id_for_update(
+            user_id,
+            conn,
+            currency=currency,
+        )
         if account is not None:
             return account
 
         try:
             await self._account_repo.create(
-                Account.create(user_id=user_id, owner_type="user"), conn
+                Account.create(user_id=user_id, owner_type="user", currency=currency),
+                conn,
             )
         except UniqueViolationError:
             # Another transaction created the account between read and insert.
             pass
 
-        account = await self._account_repo.get_by_owner_id_for_update(user_id, conn)
+        account = await self._account_repo.get_by_owner_id_for_update(
+            user_id,
+            conn,
+            currency=currency,
+        )
         if account is None:
-            raise AccountNotFound(f"Account {user_id} not found")
+            raise AccountNotFound(f"Account {user_id} ({currency}) not found")
         return account
 
     @staticmethod
