@@ -59,46 +59,67 @@ class PgTransactionRepository(TransactionRepository):
             entry.expires_at,
         )
 
-    async def save_many(self, entries: list[Transaction], conn: Connection) -> None:
+    async def save_many(
+        self,
+        entries: list[Transaction],
+        conn: Connection,
+    ) -> list[uuid.UUID]:
         if not entries:
-            return
+            return []
 
-        data = [
-            (
-                e.id,
-                e.idempotency_key,
-                e.status,
-                e.reference_type,
-                e.reference_id,
-                orjson.dumps(e.metadata).decode("utf-8"),
-                e.created_at,
-                e.expires_at,
+        rows = await conn.fetch(
+            """
+            INSERT INTO transactions (
+                id,
+                idempotency_key,
+                status,
+                reference_type,
+                reference_id,
+                metadata,
+                created_at,
+                expires_at
             )
-            for e in entries
-        ]
-
-        # await conn.executemany(
-        #     "INSERT INTO transactions "
-        #     "(id, idempotency_key, status, reference_type, reference_id, "
-        #     "metadata, created_at, expires_at) "
-        #     "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-        #     data,
-        # )
-
-        await conn.copy_records_to_table(
-            "transactions",
-            records=data,
-            columns=[
-                "id",
-                "idempotency_key",
-                "status",
-                "reference_type",
-                "reference_id",
-                "metadata",
-                "created_at",
-                "expires_at",
-            ],
+            SELECT
+                src.id,
+                src.idempotency_key,
+                src.status,
+                src.reference_type,
+                src.reference_id,
+                src.metadata::jsonb,
+                src.created_at,
+                src.expires_at
+            FROM UNNEST(
+                $1::uuid[],
+                $2::text[],
+                $3::text[],
+                $4::text[],
+                $5::text[],
+                $6::text[],
+                $7::timestamptz[],
+                $8::timestamptz[]
+            ) AS src(
+                id,
+                idempotency_key,
+                status,
+                reference_type,
+                reference_id,
+                metadata,
+                created_at,
+                expires_at
+            )
+            ON CONFLICT (idempotency_key) DO NOTHING
+            RETURNING id
+            """,
+            [e.id for e in entries],
+            [e.idempotency_key for e in entries],
+            [e.status for e in entries],
+            [e.reference_type for e in entries],
+            [e.reference_id for e in entries],
+            [orjson.dumps(e.metadata).decode("utf-8") for e in entries],
+            [e.created_at for e in entries],
+            [e.expires_at for e in entries],
         )
+        return [row["id"] for row in rows]
 
     async def filter_existing(
         self, idempotency_keys: list[str], conn: Connection

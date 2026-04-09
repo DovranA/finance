@@ -36,8 +36,12 @@ class TransactionRepository(ABC):
         ...
 
     @abstractmethod
-    async def save_many(self, entries: list[Transaction], conn: Connection) -> None:
-        """Batch insert transactions."""
+    async def save_many(
+        self,
+        entries: list[Transaction],
+        conn: Connection,
+    ) -> list[uuid.UUID]:
+        """Batch insert transactions and return inserted transaction ids."""
         ...
 
     @abstractmethod

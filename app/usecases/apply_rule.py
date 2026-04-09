@@ -154,6 +154,7 @@ class ApplyRuleUseCase:
 
         pending_txs: list[Transaction] = []
         pending_entries: list[LedgerEntry] = []
+        pending_effects: list[dict[str, Any]] = []
         pending_redis_updates: list[tuple] = (
             []
         )  # (rule, account_id, idem_key, event_code)
@@ -228,6 +229,7 @@ class ApplyRuleUseCase:
                     any_applied = False
                     first_applied_rule: dict[str, Any] | None = None
                     errors: list[str] = []
+                    candidate_tx_ids: list[uuid.UUID] = []
 
                     for target_key, user_id in targets:
                         per_target_metadata = dict(metadata)
@@ -268,18 +270,19 @@ class ApplyRuleUseCase:
                             entries = calc_res["entries"]
                             amount = calc_res["amount"]
                             direction = calc_res["direction"]
-
-                            if direction == LedgerDirection.DIRECTION_CREDIT:
-                                account.credit(amount)
-                            else:
-                                account.debit(amount)
-
                             pending_txs.append(tx)
-                            pending_entries.extend(entries)
-                            touched_accounts.add(account.id)
-
-                            pending_redis_updates.append(
-                                (rule, account.id, calc_res["idem_key"], event_code)
+                            candidate_tx_ids.append(tx.id)
+                            pending_effects.append(
+                                {
+                                    "tx_id": tx.id,
+                                    "idempotency_key": calc_res["idem_key"],
+                                    "account": account,
+                                    "amount": amount,
+                                    "direction": direction,
+                                    "entries": entries,
+                                    "rule": rule,
+                                    "event_code": event_code,
+                                }
                             )
 
                             any_applied = True
@@ -306,6 +309,9 @@ class ApplyRuleUseCase:
                             "applied": any_applied,
                             "applied_rule": first_applied_rule,
                             "error": "; ".join(errors) if errors else None,
+                            "_candidate_tx_ids": [
+                                str(tx_id) for tx_id in candidate_tx_ids
+                            ],
                         }
                     )
 
@@ -320,11 +326,85 @@ class ApplyRuleUseCase:
                         }
                     )
 
+            tx_id_to_idem = {tx.id: tx.idempotency_key for tx in pending_txs}
+            inserted_tx_ids: set[uuid.UUID] = set()
             if pending_txs:
-                await self._transaction_repo.save_many(pending_txs, conn)
+                inserted_tx_ids = set(
+                    await self._transaction_repo.save_many(pending_txs, conn)
+                )
+
+            for effect in pending_effects:
+                if effect["tx_id"] not in inserted_tx_ids:
+                    continue
+
+                account = effect["account"]
+                amount = effect["amount"]
+                direction = effect["direction"]
+                if direction == LedgerDirection.DIRECTION_CREDIT:
+                    account.credit(amount)
+                else:
+                    account.debit(amount)
+
+                pending_entries.extend(effect["entries"])
+                touched_accounts.add(account.id)
+                pending_redis_updates.append(
+                    (
+                        effect["rule"],
+                        account.id,
+                        effect["idempotency_key"],
+                        effect["event_code"],
+                    )
+                )
 
             if pending_entries:
                 await self._ledger_repo.insert_many(pending_entries, conn)
+
+            inserted_tx_id_strings = {str(tx_id) for tx_id in inserted_tx_ids}
+            for result in results:
+                candidate_ids = [
+                    tx_id
+                    for tx_id in result.pop("_candidate_tx_ids", [])
+                    if isinstance(tx_id, str)
+                ]
+                if not candidate_ids:
+                    continue
+
+                inserted_for_item = [
+                    tx_id for tx_id in candidate_ids if tx_id in inserted_tx_id_strings
+                ]
+                skipped_for_item = [
+                    tx_id
+                    for tx_id in candidate_ids
+                    if tx_id not in inserted_tx_id_strings
+                ]
+
+                result["applied"] = bool(inserted_for_item)
+                if not inserted_for_item:
+                    result["applied_rule"] = None
+
+                if skipped_for_item:
+                    skipped_keys = [
+                        tx_id_to_idem[uuid.UUID(tx_id)]
+                        for tx_id in skipped_for_item
+                        if uuid.UUID(tx_id) in tx_id_to_idem
+                    ]
+                    duplicate_reason = (
+                        "duplicate idempotency_key skipped"
+                        if skipped_keys
+                        else "duplicate transaction skipped"
+                    )
+                    result["error"] = (
+                        f"{result['error']}; {duplicate_reason}"
+                        if result.get("error")
+                        else duplicate_reason
+                    )
+                    logger.warning(
+                        "batch_item_duplicate_skipped",
+                        inbox_id=result.get("inbox_id"),
+                        user_id=result.get("user_id"),
+                        skipped_count=len(skipped_for_item),
+                        skipped_keys=skipped_keys,
+                    )
 
             for acc in accounts_cache.values():
                 if acc.id in touched_accounts:
