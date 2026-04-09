@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import re
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Literal, Optional
 
 from asyncpg import Connection, Pool
@@ -20,28 +19,43 @@ from app.usecases.statistics_base import BaseStatisticsUseCase
 
 logger = get_logger(__name__)
 
-_PERIOD_RE = re.compile(r"^(\d+)d$")
 
-
-def parse_period_days(period: str) -> int:
+def resolve_period_window(
+    period: str,
+    *,
+    today: date | None = None,
+) -> tuple[date, date]:
     normalized = (period or "").strip().lower()
+    current_day = today or date.today()
 
     if normalized == "day":
-        return 1
-    if normalized == "week":
-        return 7
-    if normalized == "month":
-        return 30
+        return current_day, current_day
 
-    match = _PERIOD_RE.match(normalized)
-    if not match:
-        raise ValueError(
-            "period must be one of: day, week, month (or Nd format like 7d)"
-        )
-    days = int(match.group(1))
-    if days <= 0 or days > 3650:
-        raise ValueError("period days must be between 1 and 3650")
-    return days
+    if normalized == "week":
+        start_from = current_day - timedelta(days=(current_day.weekday() + 1) % 7)
+        return start_from, start_from + timedelta(days=6)
+
+    if normalized == "month":
+        start_from = current_day.replace(day=1)
+        if current_day.month == 12:
+            next_month = date(current_day.year + 1, 1, 1)
+        else:
+            next_month = date(current_day.year, current_day.month + 1, 1)
+        return start_from, next_month - timedelta(days=1)
+
+    if normalized.endswith("d") and normalized[:-1].isdigit():
+        days = int(normalized[:-1])
+        if days <= 0 or days > 3650:
+            raise ValueError("period days must be between 1 and 3650")
+        start_from = current_day - timedelta(days=days - 1)
+        return start_from, current_day
+
+    raise ValueError("period must be one of: day, week, month (or Nd format like 7d)")
+
+
+def parse_period_days(period: str, *, today: date | None = None) -> int:
+    start_from, end_to = resolve_period_window(period, today=today)
+    return (end_to - start_from).days + 1
 
 
 def parse_direction(
@@ -84,6 +98,10 @@ def _paginate_items(*, items: list[dict], page: int, limit: int) -> dict:
 def _validate_date_range(start_from: date, end_to: date) -> None:
     if start_from > end_to:
         raise ValueError("start_from must be less than or equal to end_to")
+
+
+def _window_days(start_from: date, end_to: date) -> int:
+    return (end_to - start_from).days + 1
 
 
 def _paginate_window_without_count(*, items: list[dict], page: int, limit: int) -> dict:
@@ -133,7 +151,8 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
         period: str,
         direction: Literal["credit", "debit"] | None = None,
     ) -> dict:
-        period_days = parse_period_days(period)
+        start_from, end_to = resolve_period_window(period)
+        period_days = _window_days(start_from, end_to)
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
             account = await self._get_token_account(user_id, conn)
@@ -141,6 +160,8 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                 return {
                     "user_id": user_id,
                     "period_days": period_days,
+                    "period_start": start_from,
+                    "period_end": end_to,
                     "found": False,
                     "total_credits": 0,
                     "total_debits": 0,
@@ -152,12 +173,18 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                 }
 
             summary = await self._stats_repo.get_client_summary(
-                account.id, period_days, direction_value, conn
+                account.id,
+                start_from,
+                end_to,
+                direction_value,
+                conn,
             )
 
         return {
             "user_id": user_id,
             "period_days": period_days,
+            "period_start": start_from,
+            "period_end": end_to,
             "found": True,
             "total_credits": int(summary.get("total_credits") or 0),
             "total_debits": int(summary.get("total_debits") or 0),
@@ -185,7 +212,8 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
         limit: int = 20,
         direction: Literal["credit", "debit"] | None = None,
     ) -> dict:
-        period_days = parse_period_days(period)
+        start_from, end_to = resolve_period_window(period)
+        period_days = _window_days(start_from, end_to)
         _validate_page_limit(page, limit)
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
@@ -194,7 +222,11 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                 points = []
             else:
                 points = await self._stats_repo.get_client_timeline(
-                    account.id, period_days, direction_value, conn
+                    account.id,
+                    start_from,
+                    end_to,
+                    direction_value,
+                    conn,
                 )
 
         normalized_points = [
@@ -220,7 +252,8 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
         direction: Literal["credit", "debit"] | None = None,
         tags: list[str] | None = None,
     ) -> dict:
-        period_days = parse_period_days(period)
+        start_from, end_to = resolve_period_window(period)
+        period_days = _window_days(start_from, end_to)
         _validate_page_limit(page, limit)
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
@@ -233,7 +266,8 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     categories.extend(
                         await self._stats_repo.get_client_by_category(
                             account.id,
-                            period_days,
+                            start_from,
+                            end_to,
                             direction_value,
                             conn,
                             tags=tags,
@@ -307,7 +341,8 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
         limit: int = 20,
         direction: Literal["credit", "debit"] | None = None,
     ) -> dict:
-        period_days = parse_period_days(period)
+        start_from, end_to = resolve_period_window(period)
+        period_days = _window_days(start_from, end_to)
         _validate_page_limit(page, limit)
 
         direction_value = parse_direction(direction)
@@ -325,7 +360,11 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                 items: list[dict] = []
             else:
                 streaks = await self._stats_repo.get_client_streaks(
-                    account.id, period_days, direction_value, conn
+                    account.id,
+                    start_from,
+                    end_to,
+                    direction_value,
+                    conn,
                 )
                 payload = {
                     "user_id": user_id,
