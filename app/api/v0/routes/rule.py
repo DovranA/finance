@@ -173,11 +173,12 @@ async def apply_rule(
     }
 
 
-@router.get("/apply/{rule_id}/{user_id}")
+@router.get("/apply/{user_id}")
 async def can_apply_rule(
-    rule_id: uuid.UUID,
     user_id: uuid.UUID,
     uc: FromDishka[ApplyRuleUseCase],
+    rule_id: uuid.UUID | None = Query(None),
+    event_code: str | None = Query(None),
     role: str | None = Query(None),
     event_id: uuid.UUID | None = Query(None),
     metadata_json: str | None = Query(
@@ -186,6 +187,11 @@ async def can_apply_rule(
     ),
 ) -> dict:
     """Check whether the given user can apply the specified rule right now."""
+    if (rule_id is None) == (event_code is None):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide exactly one of rule_id or event_code.",
+        )
     metadata: dict = {}
     if metadata_json:
         try:
@@ -205,7 +211,12 @@ async def can_apply_rule(
     if event_id:
         metadata["event_id"] = str(event_id)
 
-    return await uc.can_apply(rule_id=rule_id, user_id=user_id, metadata=metadata)
+    return await uc.can_apply(
+        event_code=event_code,
+        rule_id=rule_id,
+        user_id=user_id,
+        metadata=metadata,
+    )
 
 
 @router.post("/apply/batch", response_model=BatchApplyRuleResponse)
