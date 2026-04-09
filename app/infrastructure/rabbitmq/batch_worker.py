@@ -38,16 +38,24 @@ class RuleBatchWorker:
             pool = await request_scope.get(Pool)
             batch_uc = await request_scope.get(BatchApplyRuleUseCase)
             flush_task = asyncio.create_task(self._flush_loop(pool, batch_uc))
+            cleanup_task = asyncio.create_task(self._cleanup_loop(pool))
             logger.info(
                 "rule_batch_worker_started",
                 interval_seconds=self._settings.batch.interval_seconds,
                 batch_size=self._settings.batch.size,
+                cleanup_days=self._settings.inbox_cleanup.cleanup_days,
+                cleanup_interval=self._settings.inbox_cleanup.cleanup_interval,
             )
 
             await self._stop.wait()
             flush_task.cancel()
+            cleanup_task.cancel()
             try:
                 await flush_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await cleanup_task
             except asyncio.CancelledError:
                 pass
 
@@ -59,6 +67,45 @@ class RuleBatchWorker:
         while not self._stop.is_set():
             await asyncio.sleep(self._settings.batch.interval_seconds)
             await self._flush_once(pool, batch_uc)
+
+    async def _cleanup_loop(self, pool: Pool) -> None:
+        cleanup_days = self._settings.inbox_cleanup.cleanup_days
+        cleanup_interval = self._settings.inbox_cleanup.cleanup_interval
+        if cleanup_days <= 0 or cleanup_interval <= 0:
+            logger.info(
+                "inbox_cleanup_disabled",
+                cleanup_days=cleanup_days,
+                cleanup_interval=cleanup_interval,
+            )
+            return
+
+        while not self._stop.is_set():
+            await asyncio.sleep(cleanup_interval)
+            try:
+                deleted_count = await self._cleanup_processed_rows(pool)
+                logger.info(
+                    "inbox_cleanup_completed",
+                    cleanup_days=cleanup_days,
+                    deleted_count=deleted_count,
+                )
+            except Exception:
+                logger.exception(
+                    "inbox_cleanup_failed",
+                    cleanup_days=cleanup_days,
+                    cleanup_interval=cleanup_interval,
+                )
+
+    async def _cleanup_processed_rows(self, pool: Pool) -> int:
+        cleanup_days = self._settings.inbox_cleanup.cleanup_days
+        async with transaction(pool) as conn:
+            result: str = await conn.execute(
+                "DELETE FROM rule_action_inbox "
+                "WHERE status = 'processed' "
+                "AND processed_at IS NOT NULL "
+                "AND processed_at < NOW() - ($1 * INTERVAL '1 day')",
+                cleanup_days,
+            )
+        return int(result.split()[-1])
 
     async def _flush_once(
         self,
