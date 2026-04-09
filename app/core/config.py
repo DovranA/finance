@@ -105,6 +105,13 @@ class BatchSettings(BaseSettings):
     interval_seconds: int = 5
 
 
+class InboxCleanupSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="INBOX_")
+
+    cleanup_days: int = 7
+    cleanup_interval: int = 3600
+
+
 class OutboxSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OUTBOX_")
 
@@ -150,6 +157,7 @@ class Settings:
         self.redis = RedisSettings()
         self.app = AppSettings()
         self.batch = BatchSettings()
+        self.inbox_cleanup = InboxCleanupSettings()
         self.outbox = OutboxSettings()
         self.rest_api = RestApiSettings()
         self.user_management = UserManagementSettings()
