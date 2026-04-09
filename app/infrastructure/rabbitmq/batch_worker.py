@@ -103,7 +103,12 @@ class RuleBatchWorker:
                 self._metrics.inc_inbox_batch_run("success")
 
                 for item in result.get("results", []):
-                    stage = "applied" if item.get("applied") else "apply_failed"
+                    if item.get("applied"):
+                        stage = "applied"
+                    elif item.get("skipped_duplicate"):
+                        stage = "duplicate_skipped"
+                    else:
+                        stage = "apply_failed"
                     self._metrics.inc_inbox_events(stage, event_code)
 
             logger.info(
@@ -111,6 +116,7 @@ class RuleBatchWorker:
                 event_code=event_code,
                 total=result["total"],
                 applied=result["applied"],
+                skipped=result.get("skipped", 0),
                 failed=result["failed"],
             )
 
@@ -150,6 +156,14 @@ class RuleBatchWorker:
                         "SET status = 'processed', processed_at = NOW(), error = NULL "
                         "WHERE id = $1",
                         uuid.UUID(inbox_id),
+                    )
+                elif item.get("skipped_duplicate"):
+                    await conn.execute(
+                        "UPDATE rule_action_inbox "
+                        "SET status = 'processed', processed_at = NOW(), error = $2 "
+                        "WHERE id = $1",
+                        uuid.UUID(inbox_id),
+                        item.get("error"),
                     )
                 else:
                     await conn.execute(
