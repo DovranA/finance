@@ -360,6 +360,8 @@ class ApplyRuleUseCase:
                 await self._ledger_repo.insert_many(pending_entries, conn)
 
             inserted_tx_id_strings = {str(tx_id) for tx_id in inserted_tx_ids}
+            duplicate_item_count = 0
+            duplicate_key_count = 0
             for result in results:
                 candidate_ids = [
                     tx_id
@@ -398,13 +400,19 @@ class ApplyRuleUseCase:
                         if result.get("error")
                         else duplicate_reason
                     )
-                    logger.warning(
-                        "batch_item_duplicate_skipped",
-                        inbox_id=result.get("inbox_id"),
-                        user_id=result.get("user_id"),
-                        skipped_count=len(skipped_for_item),
-                        skipped_keys=skipped_keys,
-                    )
+                    duplicate_item_count += 1
+                    duplicate_key_count += len(skipped_for_item)
+
+                    if not inserted_for_item:
+                        result["skipped_duplicate"] = True
+
+            if duplicate_item_count:
+                logger.info(
+                    "batch_duplicates_skipped",
+                    event_code=event_code,
+                    duplicate_items=duplicate_item_count,
+                    duplicate_keys=duplicate_key_count,
+                )
 
             for acc in accounts_cache.values():
                 if acc.id in touched_accounts:
@@ -421,11 +429,13 @@ class ApplyRuleUseCase:
                     await self._cache.invalidate_balance(treasury.id)
 
         applied_count = sum(1 for r in results if r["applied"])
+        skipped_count = sum(1 for r in results if r.get("skipped_duplicate"))
         return {
             "event_code": event_code,
             "total": len(results),
             "applied": applied_count,
-            "failed": len(results) - applied_count,
+            "skipped": skipped_count,
+            "failed": len(results) - applied_count - skipped_count,
             "results": results,
         }
 
