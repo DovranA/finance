@@ -2,8 +2,8 @@
 
 from datetime import date, timedelta
 from uuid import UUID
-from typing import Literal
 import uuid
+from typing import Literal
 
 from dishka.integrations.fastapi import DishkaRoute, FromDishka
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -40,7 +40,7 @@ admin_router = APIRouter(
 async def client_summary(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
-    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    period: Literal["day", "week", "month"] = Query("month"),
     direction: Literal["credit", "debit"] | None = Query(None),
 ) -> ClientStatsSummaryResponse:
     result = await uc.get_summary(user_id=user_id, period=period, direction=direction)
@@ -54,7 +54,7 @@ async def client_summary(
 async def client_timeline(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
-    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    period: Literal["day", "week", "month"] = Query("month"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
@@ -76,7 +76,7 @@ async def client_timeline(
 async def client_by_category(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
-    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    period: Literal["day", "week", "month"] = Query("month"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
@@ -100,7 +100,7 @@ async def client_by_category(
 async def client_streaks(
     user_id: UUID,
     uc: FromDishka[ClientStatisticsUseCase],
-    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    period: Literal["day", "week", "month"] = Query("month"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
@@ -122,7 +122,7 @@ async def client_streaks(
 async def owner_summary(
     uc: FromDishka[ClientStatisticsUseCase],
     user_id: uuid.UUID = Depends(get_current_user_id),
-    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    period: Literal["day", "week", "month"] = Query("month"),
     direction: Literal["credit", "debit"] | None = Query(None),
 ) -> ClientStatsSummaryResponse:
     result = await uc.get_summary(user_id=user_id, period=period, direction=direction)
@@ -136,7 +136,7 @@ async def owner_summary(
 async def owner_timeline(
     uc: FromDishka[ClientStatisticsUseCase],
     user_id: uuid.UUID = Depends(get_current_user_id),
-    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    period: Literal["day", "week", "month"] = Query("month"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
@@ -158,7 +158,7 @@ async def owner_timeline(
 async def owner_by_category(
     uc: FromDishka[ClientStatisticsUseCase],
     user_id: uuid.UUID = Depends(get_current_user_id),
-    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    period: Literal["day", "week", "month"] = Query("month"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),
@@ -182,7 +182,7 @@ async def owner_by_category(
 async def owner_streaks(
     uc: FromDishka[ClientStatisticsUseCase],
     user_id: uuid.UUID = Depends(get_current_user_id),
-    period: str = Query("month", pattern=r"^(day|week|month)$"),
+    period: Literal["day", "week", "month"] = Query("month"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     direction: Literal["credit", "debit"] | None = Query(None),

@@ -17,7 +17,8 @@ class StatisticsRepository(ABC):
     async def get_client_summary(
         self,
         account_id: uuid.UUID,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
     ) -> dict[str, Any]: ...
@@ -26,7 +27,8 @@ class StatisticsRepository(ABC):
     async def get_client_timeline(
         self,
         account_id: uuid.UUID,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
     ) -> list[dict[str, Any]]: ...
@@ -35,7 +37,8 @@ class StatisticsRepository(ABC):
     async def get_client_by_category(
         self,
         account_id: uuid.UUID,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
         tags: list[str] | None = None,
@@ -45,7 +48,8 @@ class StatisticsRepository(ABC):
     async def get_client_streaks(
         self,
         account_id: uuid.UUID,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
     ) -> dict[str, Any]: ...

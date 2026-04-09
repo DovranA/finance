@@ -12,6 +12,8 @@ from app.api.v0.schemas.general import PaginatedResponse
 class ClientStatsSummaryResponse(BaseModel):
     user_id: UUID
     period_days: int
+    period_start: date
+    period_end: date
     found: bool
     total_credits: int
     total_debits: int
@@ -33,6 +35,8 @@ class ClientTimelinePoint(BaseModel):
 class ClientStatsTimelineResponse(BaseModel):
     user_id: UUID
     period_days: int
+    period_start: date
+    period_end: date
     points: list[ClientTimelinePoint]
 
 
@@ -56,6 +60,8 @@ class ClientCategoryPoint(BaseModel):
 class ClientStatsByCategoryResponse(BaseModel):
     user_id: UUID
     period_days: int
+    period_start: date
+    period_end: date
     categories: list[ClientCategoryPoint]
 
 
@@ -68,6 +74,8 @@ class ClientStatsByCategoryPaginatedResponse(
 class ClientStatsStreaksResponse(BaseModel):
     user_id: UUID
     period_days: int
+    period_start: date
+    period_end: date
     current_streak_days: int
     longest_streak_days: int
     active_days_in_period: int

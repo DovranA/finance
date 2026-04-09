@@ -15,7 +15,8 @@ class PgStatisticsRepository(StatisticsRepository):
     async def get_client_summary(
         self,
         account_id: uuid.UUID,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
     ) -> dict[str, Any]:
@@ -31,11 +32,13 @@ class PgStatisticsRepository(StatisticsRepository):
                 MAX(le.created_at) AS last_transaction_at
             FROM ledger_entries le
             WHERE le.account_id = $1
-              AND le.created_at >= NOW() - ($2 * INTERVAL '1 day')
-              AND ($3::SMALLINT IS NULL OR le.direction = $3)
+                            AND le.created_at >= $2::date
+                            AND le.created_at < ($3::date + INTERVAL '1 day')
+                            AND ($4::SMALLINT IS NULL OR le.direction = $4)
             """,
             account_id,
-            period_days,
+            start_from,
+            end_to,
             direction,
         )
         return dict(row) if row else {}
@@ -43,7 +46,8 @@ class PgStatisticsRepository(StatisticsRepository):
     async def get_client_timeline(
         self,
         account_id: uuid.UUID,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
     ) -> list[dict[str, Any]]:
@@ -57,13 +61,15 @@ class PgStatisticsRepository(StatisticsRepository):
                 COALESCE(COUNT(DISTINCT le.transaction_id), 0) AS transaction_count
             FROM ledger_entries le
             WHERE le.account_id = $1
-              AND le.created_at >= NOW() - ($2 * INTERVAL '1 day')
-              AND ($3::SMALLINT IS NULL OR le.direction = $3)
+                            AND le.created_at >= $2::date
+                            AND le.created_at < ($3::date + INTERVAL '1 day')
+                            AND ($4::SMALLINT IS NULL OR le.direction = $4)
             GROUP BY 1
             ORDER BY 1 ASC
             """,
             account_id,
-            period_days,
+            start_from,
+            end_to,
             direction,
         )
         return [dict(r) for r in rows]
@@ -71,7 +77,8 @@ class PgStatisticsRepository(StatisticsRepository):
     async def get_client_by_category(
         self,
         account_id: uuid.UUID,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
         tags: list[str] | None = None,
@@ -79,7 +86,7 @@ class PgStatisticsRepository(StatisticsRepository):
         tag_filter_sql = ""
         tag_params: tuple[Any, ...] = ()
         if tags:
-            tag_filter_sql = " AND r.tags && $4::text[]"
+            tag_filter_sql = " AND r.tags && $5::text[]"
             tag_params = (tags,)
 
         rows = await conn.fetch(
@@ -98,14 +105,16 @@ class PgStatisticsRepository(StatisticsRepository):
             JOIN transactions t ON t.id = le.transaction_id
             JOIN rules r ON r.id::text = (t.metadata ->> 'rule_id')
             WHERE le.account_id = $1
-              AND le.created_at >= NOW() - ($2 * INTERVAL '1 day')
-              AND ($3::SMALLINT IS NULL OR COALESCE((r.actions ->> 'direction')::SMALLINT, le.direction) = $3)
+                            AND le.created_at >= $2::date
+                            AND le.created_at < ($3::date + INTERVAL '1 day')
+                            AND ($4::SMALLINT IS NULL OR COALESCE((r.actions ->> 'direction')::SMALLINT, le.direction) = $4)
               {tag_filter_sql}
             GROUP BY 1, 2, 3, 4, 5, 6
             ORDER BY amount DESC, rule_id ASC
             """,
             account_id,
-            period_days,
+            start_from,
+            end_to,
             direction,
             *tag_params,
         )
@@ -114,7 +123,8 @@ class PgStatisticsRepository(StatisticsRepository):
     async def get_client_streaks(
         self,
         account_id: uuid.UUID,
-        period_days: int,
+        start_from: date,
+        end_to: date,
         direction: int | None,
         conn: Connection,
     ) -> dict[str, Any]:
@@ -124,8 +134,9 @@ class PgStatisticsRepository(StatisticsRepository):
                 SELECT DISTINCT DATE(le.created_at) AS day
                 FROM ledger_entries le
                 WHERE le.account_id = $1
-                  AND le.created_at >= NOW() - ($2 * INTERVAL '1 day')
-                                    AND ($3::SMALLINT IS NULL OR le.direction = $3)
+                                    AND le.created_at >= $2::date
+                                    AND le.created_at < ($3::date + INTERVAL '1 day')
+                                    AND ($4::SMALLINT IS NULL OR le.direction = $4)
             ),
             grouped AS (
                 SELECT
@@ -145,7 +156,8 @@ class PgStatisticsRepository(StatisticsRepository):
                 (SELECT MAX(day) FROM active_days) AS last_active_day
             """,
             account_id,
-            period_days,
+            start_from,
+            end_to,
             direction,
         )
         return dict(row) if row else {}
