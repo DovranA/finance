@@ -57,6 +57,7 @@ class RabbitMQSettings(BaseSettings):
     queue_rewards: str = "finance.processed:user.event"
     queue_competition: str = "user-competition.joined:update.finance"
     queue_user_registered: str = "user.registered:update.finance"
+    queue_user_deleted: str = "user.deleted:update.finance"
     prefetch_count: int = 100
 
     @property
@@ -93,6 +94,7 @@ class AppSettings(BaseSettings):
     enable_inbox_consumer: bool = True
     enable_competition_consumer: bool = True
     enable_user_registered_consumer: bool = True
+    enable_user_deleted_consumer: bool = True
     enable_metrics: bool = True
     metrics_port: int | None = None
     metrics_db_interval_seconds: float = 5.0

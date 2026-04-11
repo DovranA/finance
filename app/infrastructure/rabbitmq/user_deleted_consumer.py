@@ -1,4 +1,4 @@
-"""RabbitMQ consumer for UserRegistered events."""
+"""RabbitMQ consumer for UserDeleted events."""
 
 from __future__ import annotations
 
@@ -12,19 +12,19 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.metrics import AppMetrics, register_metrics
 from app.di import create_container
-from app.infrastructure.rabbitmq.dto_parser_user_registered import (
-    parse_user_registered_event,
+from app.infrastructure.rabbitmq.dto_parser_user_deleted import (
+    parse_user_deleted_event,
 )
 from app.infrastructure.rabbitmq.runner import ConsumerSpec, run_consumers
-from app.usecases.user_crud import RegisterUserUseCase
+from app.usecases.user_crud import UserDeleteUseCase
 
 logger = get_logger(__name__)
 _metrics: AppMetrics | None = None
-_consumer_name = "user-registered-consumer"
+_consumer_name = "user-deleted-consumer"
 _queue_name = ""
 
 
-async def _user_registered_message_handler(
+async def _user_deleted_message_handler(
     message: IncomingMessage,
     container: AsyncContainer,
 ) -> None:
@@ -33,33 +33,32 @@ async def _user_registered_message_handler(
     started_at = time.perf_counter()
     async with message.process(requeue=False):
         try:
-            event = parse_user_registered_event(message.body)
+            event = parse_user_deleted_event(message.body)
             if _metrics is not None:
                 _metrics.inc_rabbitmq_message(_consumer_name, _queue_name, "received")
 
             async with container() as scope:
-                use_case = await scope.get(RegisterUserUseCase)
+                use_case = await scope.get(UserDeleteUseCase)
                 result = await use_case.execute(
                     user_id=event.user_id,
                     role=event.role,
-                    currency="TOKEN",
                 )
 
             if _metrics is not None:
                 _metrics.inc_rabbitmq_message(_consumer_name, _queue_name, "processed")
 
             logger.info(
-                "user_registered_event_processed",
+                "user_deleted_event_processed",
                 user_id=str(event.user_id),
-                created=result.get("created"),
-                account_id=result.get("account_id"),
+                deleted=result.get("deleted"),
+                accounts_affected=result.get("accounts_affected"),
                 duration_ms=(time.perf_counter() - started_at) * 1000,
             )
         except Exception as exc:
             if _metrics is not None:
                 _metrics.inc_rabbitmq_message(_consumer_name, _queue_name, "failed")
             logger.error(
-                "user_registered_event_failed",
+                "user_deleted_event_failed",
                 error=str(exc),
                 exc_info=True,
             )
@@ -76,7 +75,7 @@ def get_consumer_specs() -> list[ConsumerSpec]:
             exchange="user",
             queue=queue,
             routing_key="user.deleted:update.finance",
-            handler=_user_registered_message_handler,
+            handler=_user_deleted_message_handler,
         )
     ]
 
