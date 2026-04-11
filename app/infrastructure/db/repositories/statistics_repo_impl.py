@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from asyncpg import Connection
@@ -354,3 +354,71 @@ class PgStatisticsRepository(StatisticsRepository):
             user_id,
         )
         return int(rank) if rank is not None else None
+
+    async def get_admin_top_by_amount_previous_ranks(
+        self,
+        conn: Connection,
+        user_ids: list[uuid.UUID],
+        currency: str = "TOKEN",
+        comparison_from: datetime | None = None,
+    ) -> dict[uuid.UUID, int]:
+        if not user_ids:
+            return {}
+
+        if comparison_from is None:
+            comparison_from = datetime.utcnow()
+
+        rows = await conn.fetch(
+            """
+            WITH current_totals AS (
+                SELECT
+                    a.user_id,
+                    COALESCE(SUM(a.balance), 0)::BIGINT AS current_total
+                FROM accounts a
+                JOIN competition c ON c.user_id = a.user_id
+                WHERE a.owner_type = 'user'
+                  AND a.currency = $1
+                  AND a.user_id IS NOT NULL
+                GROUP BY a.user_id
+            ),
+            delta_since AS (
+                SELECT
+                    a.user_id,
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN le.direction = 1 THEN le.amount
+                                ELSE -le.amount
+                            END
+                        ),
+                        0
+                    )::BIGINT AS delta_after_cutoff
+                FROM ledger_entries le
+                JOIN accounts a ON a.id = le.account_id
+                JOIN competition c ON c.user_id = a.user_id
+                WHERE a.owner_type = 'user'
+                  AND a.currency = $1
+                  AND a.user_id IS NOT NULL
+                  AND le.created_at >= $2
+                GROUP BY a.user_id
+            ),
+            ranked AS (
+                SELECT
+                    ct.user_id,
+                    RANK() OVER (
+                        ORDER BY (ct.current_total - COALESCE(ds.delta_after_cutoff, 0)) DESC,
+                                 ct.user_id ASC
+                    )::INT AS rank_position
+                FROM current_totals ct
+                LEFT JOIN delta_since ds ON ds.user_id = ct.user_id
+            )
+            SELECT user_id, rank_position
+            FROM ranked
+            WHERE user_id = ANY($3::uuid[])
+            """,
+            currency,
+            comparison_from,
+            user_ids,
+        )
+
+        return {row["user_id"]: int(row["rank_position"]) for row in rows}

@@ -80,3 +80,44 @@ class RegisterUserUseCase:
             "user_id": str(user_id),
             "currency": currency,
         }
+
+
+class UserDeleteUseCase:
+    def __init__(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+    ) -> None:
+        self._pool = pool
+        self._account_repo = account_repo
+
+    async def execute(
+        self,
+        user_id: uuid.UUID,
+        role: str | None,
+    ) -> dict:
+        async with transaction(self._pool) as conn:
+            account_ids = [
+                account.id
+                for account in await self._account_repo.list_by_owner_id(user_id, conn)
+            ]
+
+            if not account_ids:
+                return {
+                    "user_id": str(user_id),
+                    "deleted": False,
+                    "hard_delete": False,
+                    "accounts_affected": 0,
+                }
+
+            await conn.execute(
+                "UPDATE accounts SET is_active = FALSE, updated_at = NOW() WHERE user_id = $1",
+                user_id,
+            )
+
+        return {
+            "user_id": str(user_id),
+            "deleted": True,
+            "hard_delete": False,
+            "accounts_affected": len(account_ids),
+        }

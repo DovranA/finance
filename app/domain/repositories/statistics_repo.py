@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from asyncpg import Connection
@@ -96,3 +96,12 @@ class StatisticsRepository(ABC):
         user_id: uuid.UUID,
         currency: str,
     ) -> int | None: ...
+
+    @abstractmethod
+    async def get_admin_top_by_amount_previous_ranks(
+        self,
+        conn: Connection,
+        user_ids: list[uuid.UUID],
+        currency: str,
+        comparison_from: datetime,
+    ) -> dict[uuid.UUID, int]: ...
