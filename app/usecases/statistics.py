@@ -253,7 +253,6 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
         tags: list[str] | None = None,
     ) -> dict:
         start_from, end_to = resolve_period_window(period)
-        period_days = _window_days(start_from, end_to)
         _validate_page_limit(page, limit)
         direction_value = parse_direction(direction)
         async with self._pool.acquire() as conn:
@@ -452,6 +451,21 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     }
                     for row in rows
                 ]
+
+        # Keep place status stable during TOP_BY_AMOUNT_CACHE_TTL.
+        # Recompute only when cache is rebuilt.
+        if from_cache:
+            for idx, row in enumerate(normalized_rows, start=1):
+                current_rank = int(row.get("current_rank") or (offset + idx))
+                row["current_rank"] = current_rank
+                row["previous_rank"] = row.get("previous_rank", current_rank)
+                row["place_change"] = row.get("place_change", "stay")
+        else:
+            for idx, row in enumerate(normalized_rows, start=1):
+                current_rank = offset + idx
+                row["current_rank"] = current_rank
+                row["previous_rank"] = current_rank
+                row["place_change"] = "stay"
 
         if self._cache is not None and not from_cache:
             await self._cache.set_cached_top_by_amount_page(
