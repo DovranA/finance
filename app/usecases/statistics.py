@@ -392,6 +392,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
 
         total_count = 0
         normalized_rows: list[dict[str, Any]] = []
+        previous_payload: dict[str, Any] | None = None
         from_cache = False
 
         if self._cache is not None:
@@ -404,6 +405,14 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                 total_count = int(cached_payload.get("total_count") or 0)
                 normalized_rows = list(cached_payload.get("rows") or [])
                 from_cache = True
+            else:
+                previous_payload = (
+                    await self._cache.get_cached_top_by_amount_previous_page(
+                        page=page,
+                        limit=limit,
+                        currency=currency,
+                    )
+                )
 
         async with self._pool.acquire() as conn:
             my_rank = None
@@ -461,21 +470,49 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                 row["previous_rank"] = row.get("previous_rank", current_rank)
                 row["place_change"] = row.get("place_change", "stay")
         else:
+            previous_rows = list((previous_payload or {}).get("rows") or [])
+            previous_rank_by_user: dict[str, int] = {}
+            for prev_idx, prev_row in enumerate(previous_rows, start=1):
+                prev_user_id = str(prev_row.get("user_id") or "")
+                if not prev_user_id:
+                    continue
+                prev_rank = int(prev_row.get("current_rank") or (offset + prev_idx))
+                previous_rank_by_user[prev_user_id] = prev_rank
+
             for idx, row in enumerate(normalized_rows, start=1):
                 current_rank = offset + idx
+                previous_rank = previous_rank_by_user.get(str(row.get("user_id") or ""))
+
+                if previous_rank is None:
+                    place_change = "stay"
+                    previous_rank = current_rank
+                elif current_rank < previous_rank:
+                    place_change = "increased"
+                elif current_rank > previous_rank:
+                    place_change = "decreased"
+                else:
+                    place_change = "stay"
+
                 row["current_rank"] = current_rank
-                row["previous_rank"] = current_rank
-                row["place_change"] = "stay"
+                row["previous_rank"] = previous_rank
+                row["place_change"] = place_change
 
         if self._cache is not None and not from_cache:
+            payload = {
+                "total_count": total_count,
+                "rows": normalized_rows,
+            }
             await self._cache.set_cached_top_by_amount_page(
                 page=page,
                 limit=limit,
                 currency=currency,
-                payload={
-                    "total_count": total_count,
-                    "rows": normalized_rows,
-                },
+                payload=payload,
+            )
+            await self._cache.set_cached_top_by_amount_previous_page(
+                page=page,
+                limit=limit,
+                currency=currency,
+                payload=payload,
             )
 
         return {

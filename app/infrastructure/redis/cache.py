@@ -18,6 +18,7 @@ IDEMPOTENCY_TTL = 3600  # 1 hour
 BALANCE_CACHE_TTL = 60  # 1 minute
 RULE_ACTION_STAGING_TTL = 7200  # 2 hours
 TOP_BY_AMOUNT_CACHE_TTL = 300  # 5 minutes
+TOP_BY_AMOUNT_PREV_CACHE_TTL = 3600  # 1 hour
 
 
 class CacheService:
@@ -113,6 +114,32 @@ class CacheService:
     ) -> None:
         key = f"stats:top_by_amount:{currency.upper()}:{page}:{limit}"
         await self._redis.set(key, orjson.dumps(payload), ex=TOP_BY_AMOUNT_CACHE_TTL)
+
+    async def get_cached_top_by_amount_previous_page(
+        self,
+        page: int,
+        limit: int,
+        currency: str,
+    ) -> dict[str, Any] | None:
+        key = f"stats:top_by_amount:prev:{currency.upper()}:{page}:{limit}"
+        data = await self._redis.get(key)
+        if data is None:
+            return None
+        return orjson.loads(data)
+
+    async def set_cached_top_by_amount_previous_page(
+        self,
+        page: int,
+        limit: int,
+        currency: str,
+        payload: dict[str, Any],
+    ) -> None:
+        key = f"stats:top_by_amount:prev:{currency.upper()}:{page}:{limit}"
+        await self._redis.set(
+            key,
+            orjson.dumps(payload),
+            ex=TOP_BY_AMOUNT_PREV_CACHE_TTL,
+        )
 
     # ── One-Time-Per-Event Cache (1 day) ──────────────────
 
