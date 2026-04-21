@@ -58,7 +58,7 @@ class RabbitMQSettings(BaseSettings):
     queue_competition: str = "user-competition.joined:update.finance"
     queue_user_registered: str = "user.registered:update.finance"
     queue_user_deleted: str = "user.deleted:update.finance"
-    queue_user_blocked: str = "user.blocked:update.finance"
+    queue_user_blocked: str = "user.reported:update.finance"
     prefetch_count: int = 100
 
     @property
