@@ -32,6 +32,9 @@ from app.infrastructure.rabbitmq.user_registered_consumer import (
 from app.infrastructure.rabbitmq.user_deleted_consumer import (
     run_consumer as run_user_deleted_consumer,
 )
+from app.infrastructure.rabbitmq.user_blocked_consumer import (
+    run_consumer as run_user_blocked_consumer,
+)
 from app.domain.exceptions import (
     AccountInactive,
     AccountNotFound,
@@ -267,6 +270,16 @@ async def lifespan(app: FastAPI):
         )
         logger.info("user_deleted_consumer_started")
 
+    if settings.app.enable_user_blocked_consumer:
+        app.state.user_blocked_consumer_task = asyncio.create_task(
+            run_user_blocked_consumer(app.state.container),
+            name="user_blocked_consumer",
+        )
+        app.state.user_blocked_consumer_task.add_done_callback(
+            lambda t: _log_task_result("user_blocked_consumer", t)
+        )
+        logger.info("user_blocked_consumer_started")
+
     if settings.app.enable_metrics:
         app.state.db_metrics_task = asyncio.create_task(
             _collect_db_metrics(
@@ -314,6 +327,13 @@ async def lifespan(app: FastAPI):
         user_deleted_task.cancel()
         try:
             await user_deleted_task
+        except asyncio.CancelledError:
+            pass
+    user_blocked_task = getattr(app.state, "user_blocked_consumer_task", None)
+    if user_blocked_task:
+        user_blocked_task.cancel()
+        try:
+            await user_blocked_task
         except asyncio.CancelledError:
             pass
 

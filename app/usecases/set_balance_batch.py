@@ -81,7 +81,9 @@ class BatchSetBalanceUseCase:
                 deduped_user_ids,
                 conn,
             )
-        existing_user_ids = {account.user_id for account in existing_accounts}
+        existing_user_ids = {
+            account.user_id for account in existing_accounts if account.is_active
+        }
 
         for i in range(0, total, self._max_parallelism):
             chunk = items[i : i + self._max_parallelism]

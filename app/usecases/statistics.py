@@ -142,7 +142,9 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
         conn: Connection,
     ):
         accounts = await self._account_repo.list_by_owner_id(user_id, conn)
-        return next((a for a in accounts if a.currency.upper() == "TOKEN"), None)
+        return next(
+            (a for a in accounts if a.currency.upper() == "TOKEN" and a.is_active), None
+        )
 
     async def get_summary(
         self,
@@ -262,6 +264,8 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
             else:
                 categories = []
                 for account in accounts:
+                    if not account.is_active:
+                        continue
                     categories.extend(
                         await self._stats_repo.get_client_by_category(
                             account.id,

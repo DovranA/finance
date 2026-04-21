@@ -12,11 +12,13 @@ from app.api.v0.schemas.account import (
     BatchNewBalanceRequest,
     BatchSetBalanceResponse,
     DeleteAccountResponse,
+    UpdateIsActiveRequest,
 )
 from app.usecases.delete_account import DeleteAccountUseCase
 from app.usecases.get_balance import GetBalanceUseCase
 from app.usecases.set_balance import SetBalanceUseCase
 from app.usecases.set_balance_batch import BatchSetBalanceUseCase
+from app.usecases.user_crud import UpdateIsActiveUserUseCase
 
 router = APIRouter(prefix="/accounts", tags=["Accounts"], route_class=DishkaRoute)
 
@@ -41,6 +43,15 @@ async def get_balance(
     """Get the balance for a user account."""
     result = await uc.execute(user_id=user_id, currency=currency)
     return BalanceResponse(**result)
+
+
+@router.post("/{user_id}/is_blocked", status_code=201)
+async def update_is_blocked(
+    user_id: uuid.UUID,
+    data: UpdateIsActiveRequest,
+    uc: FromDishka[UpdateIsActiveUserUseCase],
+):
+    return await uc.execute(user_id=user_id, is_blocked=data.is_blocked)
 
 
 @router.post("/{user_id}/new_balance", response_model=BalanceResponse)

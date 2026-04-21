@@ -45,6 +45,8 @@ class GetBalanceUseCase:
         selected = None
 
         for account in accounts:
+            if not account.is_active:
+                continue
             cached_flag = False
             value = account.balance
 

@@ -71,3 +71,8 @@ class AccountRepository(ABC):
 
     @abstractmethod
     async def create(self, account: Account, conn: Connection) -> None: ...
+
+    @abstractmethod
+    async def update_is_active(
+        self, user_id: uuid.UUID, is_active: bool, conn: Connection
+    ) -> None: ...

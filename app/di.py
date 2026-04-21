@@ -55,7 +55,11 @@ from app.usecases.apply_rule_batch import BatchApplyRuleUseCase
 from app.usecases.delete_account import DeleteAccountUseCase
 from app.usecases.inbox_service import InboxService
 from app.usecases.competition_service import CompetitionService
-from app.usecases.user_crud import RegisterUserUseCase, UserDeleteUseCase
+from app.usecases.user_crud import (
+    RegisterUserUseCase,
+    UpdateIsActiveUserUseCase,
+    UserDeleteUseCase,
+)
 from app.usecases.statistics import ClientStatisticsUseCase, AdminStatisticsUseCase
 
 
@@ -366,6 +370,14 @@ class UseCaseProvider(Provider):
         account_repo: AccountRepository,
     ) -> SuperAdminUseCase:
         return SuperAdminUseCase(pool=pool, account_repo=account_repo)
+
+    @provide
+    def update_is_active_uc(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+    ) -> UpdateIsActiveUserUseCase:
+        return UpdateIsActiveUserUseCase(pool=pool, account_repo=account_repo)
 
 
 def create_container() -> AsyncContainer:

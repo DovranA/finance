@@ -75,7 +75,7 @@ class PgAccountRepository(AccountRepository):
     ) -> list[Account]:
         rows = await conn.fetch(
             f"SELECT {_SELECT_COLS} FROM accounts "
-            "WHERE user_id = $1 AND is_active = TRUE ORDER BY currency",
+            "WHERE user_id = $1 ORDER BY currency",
             user_id,
         )
         return [self._to_entity(row) for row in rows]
@@ -176,6 +176,21 @@ class PgAccountRepository(AccountRepository):
                 "account_create_failed",
                 user_id=str(account.user_id),
                 account_id=str(account.id),
+            )
+            raise
+
+    async def update_is_active(self, user_id, is_active, conn):
+        try:
+            await conn.execute(
+                "UPDATE accounts " "SET is_active = $2 " " WHERE user_id = $1",
+                user_id,
+                is_active,
+            )
+        except Exception:
+            logger.error(
+                "update_is_active_failed",
+                user_id=str(user_id),
+                is_active=str(is_active),
             )
             raise
 
