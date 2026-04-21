@@ -8,7 +8,6 @@ from asyncpg import Pool
 
 from app.core.logging import get_logger
 from app.domain.repositories.account_repo import AccountRepository
-from app.domain.value_objects.enums import Currency
 from app.infrastructure.redis.cache import CacheService
 
 logger = get_logger(__name__)
@@ -45,8 +44,10 @@ class GetBalanceUseCase:
         selected = None
 
         for account in accounts:
+            # If accounts exist but are all inactive, 'balances' remains empty
             if not account.is_active:
                 continue
+
             cached_flag = False
             value = account.balance
 
@@ -69,6 +70,7 @@ class GetBalanceUseCase:
             if requested_currency and account.currency.upper() == requested_currency:
                 selected = item
 
+        # Handle case where specific currency was requested but not found among active accounts
         if requested_currency and selected is None:
             return {
                 "user_id": str(user_id),
@@ -77,7 +79,17 @@ class GetBalanceUseCase:
                 "balances": balances,
             }
 
+        # Fallback logic: if no specific currency requested, pick the first active account
         if selected is None:
+            if not balances:
+                # This prevents the IndexError: list index out of range
+                logger.info(f"No active accounts found for user {user_id}")
+                return {
+                    "user_id": str(user_id),
+                    "found": False,
+                    "cached": False,
+                    "balances": [],
+                }
             selected = balances[0]
 
         return {
