@@ -105,6 +105,7 @@ class PgStatisticsRepository(StatisticsRepository):
             JOIN transactions t ON t.id = le.transaction_id
             JOIN rules r ON r.id::text = (t.metadata ->> 'rule_id')
             WHERE le.account_id = $1
+                            AND a.is_active = TRUE
                             AND le.created_at >= $2::date
                             AND le.created_at < ($3::date + INTERVAL '1 day')
                             AND ($4::SMALLINT IS NULL OR COALESCE((r.actions ->> 'direction')::SMALLINT, le.direction) = $4)
@@ -178,6 +179,7 @@ class PgStatisticsRepository(StatisticsRepository):
                 FROM accounts
                 WHERE owner_type = 'user'
                   AND user_id IS NOT NULL
+                                    AND is_active = TRUE
             ),
             ledger_stats AS (
                 SELECT
@@ -187,6 +189,7 @@ class PgStatisticsRepository(StatisticsRepository):
                 FROM ledger_entries le
                 JOIN accounts a ON a.id = le.account_id
                 WHERE a.owner_type = 'user'
+                                    AND a.is_active = TRUE
                                     AND le.created_at >= $1::date
                                     AND le.created_at < ($2::date + INTERVAL '1 day')
                                     AND ($3::SMALLINT IS NULL OR le.direction = $3)
@@ -228,6 +231,7 @@ class PgStatisticsRepository(StatisticsRepository):
                 JOIN accounts a ON a.id = le.account_id
                 WHERE a.owner_type = 'user'
                   AND a.user_id IS NOT NULL
+                                    AND a.is_active = TRUE
                                     AND le.created_at >= $1::date
                                     AND le.created_at < ($2::date + INTERVAL '1 day')
                                     AND ($4::SMALLINT IS NULL OR le.direction = $4)
@@ -291,6 +295,7 @@ class PgStatisticsRepository(StatisticsRepository):
             FROM accounts a
             JOIN competition c ON c.user_id = a.user_id
             WHERE a.owner_type = 'user'
+                            AND a.is_active = TRUE
               AND a.currency = $1
               AND a.user_id IS NOT NULL
             GROUP BY a.user_id
@@ -316,6 +321,7 @@ class PgStatisticsRepository(StatisticsRepository):
                 FROM accounts a
                 JOIN competition c ON c.user_id = a.user_id
                 WHERE a.owner_type = 'user'
+                                    AND a.is_active = TRUE
                   AND a.currency = $1
                   AND a.user_id IS NOT NULL
                 GROUP BY a.user_id
@@ -342,6 +348,7 @@ class PgStatisticsRepository(StatisticsRepository):
                 FROM accounts a
                 JOIN competition c ON c.user_id = a.user_id
                 WHERE a.owner_type = 'user'
+                                    AND a.is_active = TRUE
                   AND a.currency = $1
                   AND a.user_id IS NOT NULL
                 GROUP BY a.user_id
@@ -377,6 +384,7 @@ class PgStatisticsRepository(StatisticsRepository):
                 FROM accounts a
                 JOIN competition c ON c.user_id = a.user_id
                 WHERE a.owner_type = 'user'
+                                    AND a.is_active = TRUE
                   AND a.currency = $1
                   AND a.user_id IS NOT NULL
                 GROUP BY a.user_id
@@ -397,6 +405,7 @@ class PgStatisticsRepository(StatisticsRepository):
                 JOIN accounts a ON a.id = le.account_id
                 JOIN competition c ON c.user_id = a.user_id
                 WHERE a.owner_type = 'user'
+                                    AND a.is_active = TRUE
                   AND a.currency = $1
                   AND a.user_id IS NOT NULL
                   AND le.created_at >= $2

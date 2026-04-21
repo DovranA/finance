@@ -41,7 +41,7 @@ class RegisterUserUseCase:
                 (
                     account
                     for account in existing_accounts
-                    if account.currency.upper() == currency
+                    if account.currency.upper() == currency and account.is_active
                 ),
                 None,
             )
@@ -100,6 +100,7 @@ class UserDeleteUseCase:
             account_ids = [
                 account.id
                 for account in await self._account_repo.list_by_owner_id(user_id, conn)
+                if account.is_active
             ]
 
             if not account_ids:
@@ -119,5 +120,38 @@ class UserDeleteUseCase:
             "user_id": str(user_id),
             "deleted": True,
             "hard_delete": False,
+            "accounts_affected": len(account_ids),
+        }
+
+
+class UpdateIsActiveUserUseCase:
+    def __init__(
+        self,
+        pool: Pool,
+        account_repo: AccountRepository,
+    ) -> None:
+        self._pool = pool
+        self._account_repo = account_repo
+
+    async def execute(self, user_id: uuid.UUID, is_blocked: bool):
+        async with transaction(self._pool) as conn:
+            account_ids = [
+                account.id
+                for account in await self._account_repo.list_by_owner_id(user_id, conn)
+            ]
+
+            if not account_ids:
+                return {
+                    "user_id": str(user_id),
+                    "is_active": True,
+                    "accounts_affected": 0,
+                }
+
+            await self._account_repo.update_is_active(
+                user_id=user_id, is_active=(not is_blocked), conn=conn
+            )
+        return {
+            "user_id": str(user_id),
+            "is_active": (not is_blocked),
             "accounts_affected": len(account_ids),
         }

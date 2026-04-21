@@ -72,7 +72,11 @@ class SetBalanceUseCase:
     ) -> Account:
         accounts = await self._account_repo.list_by_owner_id(user_id, conn)
         account = next(
-            (a for a in accounts if a.currency.upper() == currency.upper()),
+            (
+                a
+                for a in accounts
+                if a.currency.upper() == currency.upper() and a.is_active
+            ),
             None,
         )
         if account is None:

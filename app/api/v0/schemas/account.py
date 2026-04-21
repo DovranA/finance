@@ -58,3 +58,7 @@ class DeleteAccountResponse(BaseModel):
     deleted: bool
     hard_delete: bool = False
     accounts_affected: int
+
+
+class UpdateIsActiveRequest(BaseModel):
+    is_blocked: bool
