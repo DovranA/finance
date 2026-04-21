@@ -71,7 +71,7 @@ def get_consumer_specs() -> list[ConsumerSpec]:
             name=_consumer_name,
             exchange="user",
             queue=queue,
-            routing_key="user.blocked:update.finance",
+            routing_key="user.reported",
             handler=_user_blocked_message_handler,
         )
     ]
