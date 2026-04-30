@@ -24,6 +24,7 @@ from app.domain.policies.validators.daily_limit import DailyLimitValidator
 from app.domain.policies.validators.cooldown_days import CooldownDaysValidator
 from app.domain.policies.validators.one_time_only import OneTimeValidator
 from app.domain.policies.validators.required_metadata import RequiredMetadataValidator
+from app.domain.policies.validators.view_percentage import ViewPercentageValidator
 from app.infrastructure.db.connection import create_pool, close_pool
 from app.infrastructure.db.repositories.account_repo_impl import PgAccountRepository
 from app.infrastructure.db.repositories.transaction_repo_impl import (
@@ -61,7 +62,6 @@ from app.usecases.user_crud import (
     UserDeleteUseCase,
 )
 from app.usecases.statistics import ClientStatisticsUseCase, AdminStatisticsUseCase
-
 
 logger = get_logger(__name__)
 
@@ -169,6 +169,7 @@ class PolicyProvider(Provider):
         global_registry.register(CooldownDaysValidator())
         global_registry.register(OneTimeValidator(cache=cache))
         global_registry.register(RequiredMetadataValidator())
+        global_registry.register(ViewPercentageValidator())
         return global_registry
 
     @provide
