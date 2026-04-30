@@ -20,6 +20,7 @@ class RuleCondition(BaseModel):
     one_time_only: Optional[bool] = None
     daily_limit: Optional[int] = None
     cooldown_days: Optional[int] = None
+    view_percentage: Optional[dict[str, float | int] | int] = None
     required_metadata: Optional[list[str]] = None
     idempotency_pattern: Optional[str] = None
 

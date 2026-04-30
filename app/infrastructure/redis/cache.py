@@ -13,12 +13,12 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 # TTLs in seconds
-ECONOMIC_CONFIG_TTL = 300  # 5 minutes
-IDEMPOTENCY_TTL = 3600  # 1 hour
+ECONOMIC_CONFIG_TTL = 60 * 5  # 5 minutes
+IDEMPOTENCY_TTL = 60 * 60  # 1 hour
 BALANCE_CACHE_TTL = 60  # 1 minute
-RULE_ACTION_STAGING_TTL = 7200  # 2 hours
-TOP_BY_AMOUNT_CACHE_TTL = 300  # 5 minutes
-TOP_BY_AMOUNT_PREV_CACHE_TTL = 60 * 60 * 24  # 1 day
+RULE_ACTION_STAGING_TTL = 60 * 60 * 2  # 2 hours
+TOP_BY_AMOUNT_CACHE_TTL = 60 * 5  # 5 minutes
+TOP_BY_AMOUNT_PREV_CACHE_TTL = 60 * 60  # 1 hour
 
 
 class CacheService:

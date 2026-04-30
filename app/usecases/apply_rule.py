@@ -461,7 +461,7 @@ class ApplyRuleUseCase:
                     "rule_id": str(rule_id) if rule_id else None,
                     "event_code": event_code,
                 }
-
+            print("rule", rule)
             event_code = event_code or rule.event_code
             metadata["event_code"] = event_code
 
@@ -478,6 +478,7 @@ class ApplyRuleUseCase:
                 conn,
                 currency=account_currency,
             )
+            print("account_currency", account_currency)
             if account is None:
                 account = Account.create(
                     user_id=user_id,
@@ -485,6 +486,7 @@ class ApplyRuleUseCase:
                     owner_type="user",
                     balance=0,
                 )
+
             account.ensure_active()
 
             rule_idem_key = self._resolve_idem_key(
@@ -517,7 +519,7 @@ class ApplyRuleUseCase:
                         amount = int(fallback_amount or 0)
                     except (TypeError, ValueError):
                         amount = 0
-
+            print("amount", amount)
             if amount <= 0:
                 return {
                     "can_apply": False,
@@ -693,6 +695,13 @@ class ApplyRuleUseCase:
         amount = (
             amount_override if amount_override is not None else actions.get("amount", 0)
         )
+
+        # Apply view_percentage multiplier if available
+        multiplier = metadata.get("view_percentage_multiplier")
+        print("multiplier", multiplier)
+        if multiplier is not None and amount > 0:
+            amount = int(amount * float(multiplier))
+            print("amount after calculation", amount)
         if amount <= 0:
             return None
 
@@ -766,6 +775,8 @@ class ApplyRuleUseCase:
             await self._condition_engine.validate(
                 rule.conditions, account=account, metadata=metadata, conn=conn
             )
+        except Exception as e:
+            logger.error("validation Error")
         except ValueError as e:
             return {"unsuccess": f"Error on: {e}"}
 
@@ -786,6 +797,11 @@ class ApplyRuleUseCase:
                     amount = int(fallback_amount or 0)
                 except (TypeError, ValueError):
                     amount = 0
+
+        # Apply view_percentage multiplier if available
+        multiplier = metadata.get("view_percentage_multiplier")
+        if multiplier is not None and amount > 0:
+            amount = int(amount * float(multiplier))
 
         if amount <= 0:
             return None
@@ -887,6 +903,7 @@ class ApplyRuleUseCase:
                     ).isoformat()
                     result["expired_at"] = expired_at
             except (TypeError, ValueError):
+
                 pass
 
         return result
@@ -1067,7 +1084,9 @@ class ApplyRuleUseCase:
         fallback_key: str,
         metadata: dict,
     ) -> str:
+        one_time_only = rule.conditions.get("one_time_only")
         pattern = rule.conditions.get("idempotency_pattern")
+
         if pattern:
             context = {
                 "event_code": event_code,
@@ -1076,8 +1095,14 @@ class ApplyRuleUseCase:
                 "rule_id": str(rule.id),
                 **metadata,
             }
-            return resolve_idempotency_pattern(pattern, context)
-        return generate_idempotency_key(fallback_key, str(rule.id))
+            seed = resolve_idempotency_pattern(pattern, context)
+        else:
+            seed = fallback_key
+
+        if not one_time_only:
+            seed = f"{seed}:{datetime.now(timezone.utc).isoformat(timespec='microseconds')}"
+
+        return generate_idempotency_key(seed, str(rule.id))
 
     @staticmethod
     def _resolve_target_users(
