@@ -33,7 +33,7 @@ class RegisterUserUseCase:
         currency: str = "TOKEN",
     ) -> dict:
         currency = currency.upper()
-        owner_type = (role or "user").strip().lower() or "user"
+        owner_type = "user"
 
         async with transaction(self._pool) as conn:
             existing_accounts = await self._account_repo.list_by_owner_id(user_id, conn)
