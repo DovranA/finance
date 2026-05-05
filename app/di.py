@@ -10,6 +10,7 @@ from dishka import Provider, Scope, provide, make_async_container, AsyncContaine
 
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
+from app.domain.policies.validators.dynamic_amount import DynamicAmountValidator
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.transfer_repo import TransactionRepository
 from app.domain.repositories.ledger_repo import LedgerRepository
@@ -170,6 +171,7 @@ class PolicyProvider(Provider):
         global_registry.register(OneTimeValidator(cache=cache))
         global_registry.register(RequiredMetadataValidator())
         global_registry.register(ViewPercentageValidator())
+        global_registry.register(DynamicAmountValidator())
         return global_registry
 
     @provide

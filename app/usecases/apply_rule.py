@@ -775,10 +775,10 @@ class ApplyRuleUseCase:
             await self._condition_engine.validate(
                 rule.conditions, account=account, metadata=metadata, conn=conn
             )
-        except Exception as e:
-            logger.error("validation Error")
         except ValueError as e:
             return {"unsuccess": f"Error on: {e}"}
+        except Exception as e:
+            logger.error("Validation Error", error=e)
 
         actions = rule.actions
         direction = LedgerDirection(actions.get("direction", 1))
@@ -802,7 +802,9 @@ class ApplyRuleUseCase:
         multiplier = metadata.get("view_percentage_multiplier")
         if multiplier is not None and amount > 0:
             amount = int(amount * float(multiplier))
-
+        dynamic_amount = metadata.get("dynamic_amount")
+        if dynamic_amount is not None and dynamic_amount > 0:
+            amount = int(dynamic_amount)
         if amount <= 0:
             return None
 
