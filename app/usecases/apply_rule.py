@@ -213,7 +213,10 @@ class ApplyRuleUseCase:
                     metadata["event_id"] = str(event_id)
                 metadata["event_code"] = event_code
 
+                # Use savepoint for each item so database errors don't abort the entire transaction
+                item_sp = conn.transaction()
                 try:
+                    await item_sp.start()
                     targets = self._resolve_target_users(rule, item)
 
                     if self._should_lookup_role(rule, metadata):
@@ -230,6 +233,11 @@ class ApplyRuleUseCase:
                     first_applied_rule: dict[str, Any] | None = None
                     errors: list[str] = []
                     candidate_tx_ids: list[uuid.UUID] = []
+                    item_pending_txs: list[Transaction] = []
+                    item_pending_effects: list[dict[str, Any]] = []
+                    item_touched_accounts: set[uuid.UUID] = set()
+                    item_pending_redis_updates: list[tuple] = []
+                    item_cache_updates: list[tuple[uuid.UUID, Account]] = []
 
                     for target_key, user_id in targets:
                         per_target_metadata = dict(metadata)
@@ -250,7 +258,7 @@ class ApplyRuleUseCase:
                                 conn,
                                 currency=rule_currency,
                             )
-                            accounts_cache[user_id] = account
+                            item_cache_updates.append((user_id, account))
 
                         account.ensure_active()
 
@@ -270,9 +278,9 @@ class ApplyRuleUseCase:
                             entries = calc_res["entries"]
                             amount = calc_res["amount"]
                             direction = calc_res["direction"]
-                            pending_txs.append(tx)
+                            item_pending_txs.append(tx)
                             candidate_tx_ids.append(tx.id)
-                            pending_effects.append(
+                            item_pending_effects.append(
                                 {
                                     "tx_id": tx.id,
                                     "idempotency_key": calc_res["idem_key"],
@@ -314,8 +322,13 @@ class ApplyRuleUseCase:
                             ],
                         }
                     )
-
+                    await item_sp.commit()
+                    pending_txs.extend(item_pending_txs)
+                    pending_effects.extend(item_pending_effects)
+                    for user_id, account in item_cache_updates:
+                        accounts_cache[user_id] = account
                 except Exception as exc:
+                    await item_sp.rollback()
                     results.append(
                         {
                             "inbox_id": inbox_id,
@@ -698,10 +711,8 @@ class ApplyRuleUseCase:
 
         # Apply view_percentage multiplier if available
         multiplier = metadata.get("view_percentage_multiplier")
-        print("multiplier", multiplier)
         if multiplier is not None and amount > 0:
             amount = int(amount * float(multiplier))
-            print("amount after calculation", amount)
         if amount <= 0:
             return None
 
@@ -1169,6 +1180,18 @@ class ApplyRuleUseCase:
         )
         if account is not None:
             return account
+
+        existing_accounts = await self._account_repo.list_by_owner_id(user_id, conn)
+        existing_account = next(
+            (
+                item
+                for item in existing_accounts
+                if item.currency.upper() == currency.upper()
+            ),
+            None,
+        )
+        if existing_account is not None:
+            return existing_account
 
         try:
             await self._account_repo.create(
