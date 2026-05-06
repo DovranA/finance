@@ -65,8 +65,11 @@ class RuleBatchWorker:
         batch_uc: BatchApplyRuleUseCase,
     ) -> None:
         while not self._stop.is_set():
+            try:
+                await self._flush_once(pool, batch_uc)
+            except Exception:
+                logger.exception("rule_batch_flush_failed")
             await asyncio.sleep(self._settings.batch.interval_seconds)
-            await self._flush_once(pool, batch_uc)
 
     async def _cleanup_loop(self, pool: Pool) -> None:
         cleanup_days = self._settings.inbox_cleanup.cleanup_days
