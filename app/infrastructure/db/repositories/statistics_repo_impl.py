@@ -94,7 +94,14 @@ class PgStatisticsRepository(StatisticsRepository):
             SELECT
                 r.id::text AS rule_id,
                 r.event_code AS event_code,
-                COALESCE(r.description_i18n, '{{}}'::jsonb) AS description_i18n,
+                CASE
+            WHEN NULLIF(TRIM(t.metadata ->> 'description'), '') IS NOT NULL THEN jsonb_build_object(
+                'ru', t.metadata ->> 'description',
+                'en', t.metadata ->> 'description',
+                'tk', t.metadata ->> 'description'
+            )
+            ELSE COALESCE(r.description_i18n, '{{}}'::jsonb)
+                END AS description_i18n,
                 COALESCE(r.tags, ARRAY[]::text[]) AS tags,
                 COALESCE((r.actions ->> 'direction')::SMALLINT, le.direction) AS direction,
                 a.currency AS currency,
