@@ -290,6 +290,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
             key = (
                 c.get("rule_id"),
                 c.get("event_code") or c.get("category"),
+                orjson.dumps(description_i18n, option=orjson.OPT_SORT_KEYS).decode(),
                 c.get("direction"),
                 c.get("currency"),
             )

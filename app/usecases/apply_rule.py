@@ -474,7 +474,6 @@ class ApplyRuleUseCase:
                     "rule_id": str(rule_id) if rule_id else None,
                     "event_code": event_code,
                 }
-            print("rule", rule)
             event_code = event_code or rule.event_code
             metadata["event_code"] = event_code
 
@@ -491,7 +490,6 @@ class ApplyRuleUseCase:
                 conn,
                 currency=account_currency,
             )
-            print("account_currency", account_currency)
             if account is None:
                 account = Account.create(
                     user_id=user_id,
@@ -532,7 +530,6 @@ class ApplyRuleUseCase:
                         amount = int(fallback_amount or 0)
                     except (TypeError, ValueError):
                         amount = 0
-            print("amount", amount)
             if amount <= 0:
                 return {
                     "can_apply": False,
