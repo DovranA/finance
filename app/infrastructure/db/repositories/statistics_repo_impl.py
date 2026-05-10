@@ -293,26 +293,52 @@ class PgStatisticsRepository(StatisticsRepository):
         limit: int = 10,
         offset: int = 0,
         currency: str = "TOKEN",
+        order_by_frozen: bool = False,
     ) -> list[dict[str, Any]]:
-        rows = await conn.fetch(
-            """
-            SELECT
-                a.user_id,
-                COALESCE(SUM(a.balance), 0)::BIGINT AS total_amount
-            FROM accounts a
-            JOIN competition c ON c.user_id = a.user_id
-            WHERE a.owner_type = 'user'
-                            AND a.is_active = TRUE
-              AND a.currency = $1
-              AND a.user_id IS NOT NULL
-            GROUP BY a.user_id
-            ORDER BY total_amount DESC, a.user_id ASC
-            LIMIT $2 OFFSET $3
-            """,
-            currency,
-            limit,
-            offset,
-        )
+        if order_by_frozen:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    a.user_id,
+                    COALESCE(SUM(a.balance), 0)::BIGINT AS total_amount,
+                    c.frozen_rank,
+                    c.frozen_balance
+                FROM accounts a
+                JOIN competition c ON c.user_id = a.user_id
+                WHERE a.owner_type = 'user'
+                                AND a.is_active = TRUE
+                  AND a.currency = $1
+                  AND a.user_id IS NOT NULL
+                GROUP BY a.user_id, c.frozen_rank, c.frozen_balance
+                ORDER BY COALESCE(c.frozen_balance, 0) DESC, a.user_id ASC
+                LIMIT $2 OFFSET $3
+                """,
+                currency,
+                limit,
+                offset,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    a.user_id,
+                    COALESCE(SUM(a.balance), 0)::BIGINT AS total_amount,
+                    c.frozen_rank,
+                    c.frozen_balance
+                FROM accounts a
+                JOIN competition c ON c.user_id = a.user_id
+                WHERE a.owner_type = 'user'
+                                AND a.is_active = TRUE
+                  AND a.currency = $1
+                  AND a.user_id IS NOT NULL
+                GROUP BY a.user_id, c.frozen_rank, c.frozen_balance
+                ORDER BY total_amount DESC, a.user_id ASC
+                LIMIT $2 OFFSET $3
+                """,
+                currency,
+                limit,
+                offset,
+            )
         return [dict(r) for r in rows]
 
     async def get_admin_top_by_amount_count(
@@ -343,31 +369,106 @@ class PgStatisticsRepository(StatisticsRepository):
         conn: Connection,
         user_id: uuid.UUID,
         currency: str = "TOKEN",
+        order_by_frozen: bool = False,
     ) -> int | None:
-        rank = await conn.fetchval(
+        if order_by_frozen:
+            rank = await conn.fetchval(
+                """
+                WITH ranked AS (
+                    SELECT
+                        a.user_id,
+                        RANK() OVER (
+                            ORDER BY COALESCE(c.frozen_balance, 0) DESC, a.user_id ASC
+                        )::INT AS rank_position
+                    FROM accounts a
+                    JOIN competition c ON c.user_id = a.user_id
+                    WHERE a.owner_type = 'user'
+                        AND a.is_active = TRUE
+                        AND a.currency = $1
+                        AND a.user_id IS NOT NULL
+                    GROUP BY a.user_id, c.frozen_balance
+                )
+                SELECT rank_position
+                FROM ranked
+                WHERE user_id = $2
+                """,
+                currency,
+                user_id,
+            )
+        else:
+            rank = await conn.fetchval(
+                """
+                WITH ranked AS (
+                    SELECT
+                        a.user_id,
+                        RANK() OVER (
+                            ORDER BY COALESCE(SUM(a.balance), 0)::BIGINT DESC, a.user_id ASC
+                        )::INT AS rank_position
+                    FROM accounts a
+                    JOIN competition c ON c.user_id = a.user_id
+                    WHERE a.owner_type = 'user'
+                        AND a.is_active = TRUE
+                        AND a.currency = $1
+                        AND a.user_id IS NOT NULL
+                    GROUP BY a.user_id 
+                )
+                SELECT rank_position
+                FROM ranked
+                WHERE user_id = $2
+                """,
+                currency,
+                user_id,
+            )
+        return int(rank) if rank is not None else None
+
+    async def freeze_competition_snapshot(
+        self,
+        conn: Connection,
+        currency: str = "TOKEN",
+    ) -> int:
+        rows = await conn.fetch(
             """
             WITH ranked AS (
                 SELECT
-                    a.user_id,
+                a.user_id,
+                    COALESCE(SUM(a.balance), 0)::BIGINT AS total_amount,
                     RANK() OVER (
                         ORDER BY COALESCE(SUM(a.balance), 0)::BIGINT DESC, a.user_id ASC
                     )::INT AS rank_position
                 FROM accounts a
                 JOIN competition c ON c.user_id = a.user_id
                 WHERE a.owner_type = 'user'
-                                    AND a.is_active = TRUE
-                  AND a.currency = $1
-                  AND a.user_id IS NOT NULL
+                    AND a.is_active = TRUE
+                    AND a.currency = $1
+                    AND a.user_id IS NOT NULL
                 GROUP BY a.user_id
             )
-            SELECT rank_position
+            UPDATE competition c
+            SET frozen_rank = ranked.rank_position,
+                frozen_balance = ranked.total_amount,
+                frozen_at = NOW()
             FROM ranked
-            WHERE user_id = $2
+            WHERE c.user_id = ranked.user_id
+              AND c.frozen_at IS NULL
+            RETURNING c.user_id
             """,
             currency,
-            user_id,
         )
-        return int(rank) if rank is not None else None
+        return len(rows)
+
+    async def competition_snapshot_needs_refresh(
+        self,
+        conn: Connection,
+        freeze_datetime: datetime,
+    ) -> bool:
+        pending = await conn.fetchval("""
+            SELECT EXISTS(
+                SELECT 1
+                FROM competition
+                WHERE frozen_at IS NULL
+            )
+            """)
+        return bool(pending)
 
     async def get_admin_top_by_amount_previous_ranks(
         self,

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from typing import Any, Literal, Optional
 
 from asyncpg import Connection, Pool
 import orjson
 
 from app.core.logging import get_logger
+from app.core.config import get_settings
 from app.domain.entities.user import User
 from app.domain.repositories.account_repo import AccountRepository
 from app.domain.repositories.statistics_repo import StatisticsRepository
@@ -419,6 +420,14 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     )
                 )
 
+        settings = get_settings()
+        freeze_active = False
+        try:
+            freeze_dt = datetime.fromisoformat(settings.competition.freeze_datetime)
+            freeze_active = datetime.utcnow() >= freeze_dt
+        except Exception:
+            freeze_active = False
+
         async with self._pool.acquire() as conn:
             my_rank = None
             if current_user_id is not None:
@@ -426,6 +435,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     conn,
                     current_user_id,
                     currency,
+                    order_by_frozen=freeze_active,
                 )
             if not from_cache:
                 total_count = await self._stats_repo.get_admin_top_by_amount_count(
@@ -437,6 +447,7 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
                     limit,
                     offset,
                     currency,
+                    order_by_frozen=freeze_active,
                 )
 
                 # Extract user IDs for batch lookup
@@ -531,6 +542,21 @@ class ClientStatisticsUseCase(BaseStatisticsUseCase):
             "total_participants": total_count,
             "cached": from_cache,
         }
+
+    async def freeze_competition_snapshot(self, *, currency: str = "TOKEN") -> int:
+        async with self._pool.acquire() as conn:
+            return await self._stats_repo.freeze_competition_snapshot(conn, currency)
+
+    async def competition_snapshot_needs_refresh(
+        self,
+        *,
+        freeze_datetime: datetime,
+    ) -> bool:
+        async with self._pool.acquire() as conn:
+            return await self._stats_repo.competition_snapshot_needs_refresh(
+                conn,
+                freeze_datetime,
+            )
 
 
 class AdminStatisticsUseCase(BaseStatisticsUseCase):
@@ -638,6 +664,15 @@ class AdminStatisticsUseCase(BaseStatisticsUseCase):
         _validate_page_limit(page, limit)
         offset = (page - 1) * limit
 
+        settings = get_settings()
+        freeze_active = False
+        try:
+            freeze_dt = datetime.fromisoformat(settings.competition.freeze_datetime)
+            freeze_active = datetime.utcnow() >= freeze_dt
+        except Exception:
+            # If config malformed, default to no freeze
+            freeze_active = False
+
         async with self._pool.acquire() as conn:
             total_count = await self._stats_repo.get_admin_top_by_amount_count(
                 conn,
@@ -649,12 +684,14 @@ class AdminStatisticsUseCase(BaseStatisticsUseCase):
                     conn,
                     current_user_id,
                     currency,
+                    order_by_frozen=freeze_active,
                 )
             rows = await self._stats_repo.get_admin_top_by_amount(
                 conn,
                 limit,
                 offset,
                 currency,
+                order_by_frozen=freeze_active,
             )
         # Extract user IDs for batch lookup
         user_ids = [row.get("user_id") for row in rows]
@@ -671,6 +708,8 @@ class AdminStatisticsUseCase(BaseStatisticsUseCase):
                     else None
                 ),
                 "total_amount": int(row.get("total_amount") or 0),
+                "frozen_rank": row.get("frozen_rank"),
+                "frozen_balance": row.get("frozen_balance"),
             }
             for row in rows
         ]
@@ -685,3 +724,18 @@ class AdminStatisticsUseCase(BaseStatisticsUseCase):
             "total_participants": total_count,
             "cached": False,
         }
+
+    async def freeze_competition_snapshot(self, *, currency: str = "TOKEN") -> int:
+        async with self._pool.acquire() as conn:
+            return await self._stats_repo.freeze_competition_snapshot(conn, currency)
+
+    async def competition_snapshot_needs_refresh(
+        self,
+        *,
+        freeze_datetime: datetime,
+    ) -> bool:
+        async with self._pool.acquire() as conn:
+            return await self._stats_repo.competition_snapshot_needs_refresh(
+                conn,
+                freeze_datetime,
+            )

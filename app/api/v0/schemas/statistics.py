@@ -120,6 +120,8 @@ class AdminStreaksPaginatedResponse(PaginatedResponse[list[AdminStreakPoint]]):
 class AdminTopByAmountPoint(BaseModel):
     user_id: UUID
     total_amount: int
+    frozen_rank: int | None = None
+    frozen_balance: int | None = None
 
 
 class AdminTopByAmountResponse(BaseModel):

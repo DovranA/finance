@@ -152,6 +152,13 @@ class JwtSettings(BaseSettings):
     leeway_seconds: int = 0
 
 
+class CompetitionSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="COMPETITION_")
+
+    freeze_datetime: str = "2026-05-11T00:00:00"  # ISO format datetime
+    enabled: bool = True
+
+
 class Settings:
     """Aggregated application settings."""
 
@@ -166,6 +173,7 @@ class Settings:
         self.rest_api = RestApiSettings()
         self.user_management = UserManagementSettings()
         self.jwt = JwtSettings()
+        self.competition = CompetitionSettings()
 
 
 @lru_cache(maxsize=1)

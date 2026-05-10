@@ -29,6 +29,10 @@ class RuleAlreadyExists(DomainError):
     """Raised when a rule with the same event_code already exists."""
 
 
+class CompetitionFrozen(DomainError):
+    """Raised when competition join is attempted after freeze datetime."""
+
+
 class AuthError(Exception):
     """Base class for authentication-related errors."""
 

@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING
 
 from asyncpg import Pool
 
 from app.core.logging import get_logger
 from app.core.metrics import register_metrics
+from app.core.config import get_settings
+from app.domain.exceptions import CompetitionFrozen
+
+if TYPE_CHECKING:
+    from app.usecases.statistics import AdminStatisticsUseCase
 
 logger = get_logger(__name__)
 
@@ -18,15 +25,46 @@ class CompetitionService:
     def __init__(self, pool: Pool) -> None:
         self._pool = pool
 
-    async def handle(self, user_id: uuid.UUID, in_competition: bool) -> None:
+    async def handle(
+        self,
+        user_id: uuid.UUID,
+        in_competition: bool,
+        admin_stats_uc: AdminStatisticsUseCase | None = None,
+    ) -> None:
         """
-        Add or remove user from competition table.
+        Add or remove user from competition table, capturing frozen rank and balance.
 
         Args:
             user_id: UUID of the user
             in_competition: True to add user to competition, False to remove
+            admin_stats_uc: AdminStatisticsUseCase for calculating rank (required for joins)
+
+        Raises:
+            CompetitionFrozen: If trying to add user after freeze datetime
         """
         metrics = await register_metrics()
+
+        # Check freeze datetime only when adding user to competition
+        if in_competition:
+            settings = get_settings()
+            freeze_datetime = datetime.fromisoformat(
+                settings.competition.freeze_datetime
+            )
+            current_time = datetime.utcnow()
+
+            if current_time >= freeze_datetime:
+                logger.warning(
+                    "competition_frozen",
+                    user_id=str(user_id),
+                    freeze_datetime=settings.competition.freeze_datetime,
+                    current_time=current_time.isoformat(),
+                )
+                metrics.inc_rabbitmq_message(
+                    "competition-consumer", "competition", "frozen_rejection"
+                )
+                raise CompetitionFrozen(
+                    f"Competition is frozen as of {settings.competition.freeze_datetime}"
+                )
 
         async with self._pool.acquire() as conn:
             try:

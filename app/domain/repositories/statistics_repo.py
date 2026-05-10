@@ -80,6 +80,7 @@ class StatisticsRepository(ABC):
         limit: int,
         offset: int,
         currency: str,
+        order_by_frozen: bool = False,
     ) -> list[dict[str, Any]]: ...
 
     @abstractmethod
@@ -95,7 +96,22 @@ class StatisticsRepository(ABC):
         conn: Connection,
         user_id: uuid.UUID,
         currency: str,
+        order_by_frozen: bool = False,
     ) -> int | None: ...
+
+    @abstractmethod
+    async def freeze_competition_snapshot(
+        self,
+        conn: Connection,
+        currency: str,
+    ) -> int: ...
+
+    @abstractmethod
+    async def competition_snapshot_needs_refresh(
+        self,
+        conn: Connection,
+        freeze_datetime: datetime,
+    ) -> bool: ...
 
     @abstractmethod
     async def get_admin_top_by_amount_previous_ranks(
