@@ -510,6 +510,7 @@ class ApplyRuleUseCase:
                     rule.conditions, account=account, metadata=metadata, conn=conn
                 )
             except Exception as exc:
+
                 return {
                     "can_apply": False,
                     "reason": str(exc),
@@ -779,14 +780,9 @@ class ApplyRuleUseCase:
         )
         metadata["idempotency_key"] = rule_idem_key
 
-        try:
-            await self._condition_engine.validate(
-                rule.conditions, account=account, metadata=metadata, conn=conn
-            )
-        except ValueError as e:
-            return {"unsuccess": f"Error on: {e}"}
-        except Exception as e:
-            logger.error("Validation Error", error=e)
+        await self._condition_engine.validate(
+            rule.conditions, account=account, metadata=metadata, conn=conn
+        )
 
         actions = rule.actions
         direction = LedgerDirection(actions.get("direction", 1))

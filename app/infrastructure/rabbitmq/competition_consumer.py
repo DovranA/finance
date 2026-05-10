@@ -11,10 +11,12 @@ from prometheus_client import start_http_server
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.metrics import AppMetrics, register_metrics
+from app.domain.exceptions import CompetitionFrozen
 from app.infrastructure.rabbitmq.dto_parser_competition import (
     parse_competition_event,
 )
 from app.usecases.set_balance import SetBalanceUseCase
+from app.usecases.statistics import AdminStatisticsUseCase
 from app.usecases.competition_service import CompetitionService
 from app.di import create_container
 from app.infrastructure.rabbitmq.runner import ConsumerSpec, run_consumers
@@ -47,7 +49,25 @@ async def _competition_message_handler(
 
             async with container() as scope:
                 service = await scope.get(CompetitionService)
-                await service.handle(event.user_id, event.in_competition)
+                admin_stats_uc = await scope.get(AdminStatisticsUseCase)
+                try:
+                    await service.handle(
+                        event.user_id,
+                        event.in_competition,
+                        admin_stats_uc=admin_stats_uc,
+                    )
+                except CompetitionFrozen as e:
+                    logger.warning(
+                        "competition_join_rejected_frozen",
+                        user_id=str(event.user_id),
+                        reason=str(e),
+                    )
+                    if _metrics is not None:
+                        _metrics.inc_rabbitmq_message(
+                            _consumer_name, _queue_name, "frozen"
+                        )
+                    # Don't raise - message is already processed, just log the rejection
+                    return
 
                 set_balance_uc = await scope.get(SetBalanceUseCase)
                 await set_balance_uc.execute(

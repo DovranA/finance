@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -48,6 +49,7 @@ from app.domain.exceptions import (
     RuleAlreadyExists,
 )
 from app.usecases.rule_crud import RuleNotFound
+from app.usecases.statistics import AdminStatisticsUseCase
 
 logger = get_logger(__name__)
 
@@ -73,6 +75,46 @@ async def _collect_db_metrics(
             raise
         except Exception as exc:
             logger.warning("db_metrics_collection_failed", error=str(exc))
+
+        await asyncio.sleep(interval_seconds)
+
+
+async def _freeze_competition_snapshot(
+    container,
+    interval_seconds: float,
+) -> None:
+    freeze_done = False
+    while True:
+        try:
+            if not freeze_done:
+                settings = get_settings()
+                freeze_datetime = datetime.fromisoformat(
+                    settings.competition.freeze_datetime
+                )
+                if datetime.utcnow() >= freeze_datetime:
+                    async with container() as request_scope:
+                        admin_stats_uc = await request_scope.get(AdminStatisticsUseCase)
+                        needs_refresh = (
+                            await admin_stats_uc.competition_snapshot_needs_refresh(
+                                freeze_datetime=freeze_datetime,
+                            )
+                        )
+                        if needs_refresh:
+                            updated_rows = (
+                                await admin_stats_uc.freeze_competition_snapshot(
+                                    currency="TOKEN"
+                                )
+                            )
+                            logger.info(
+                                "competition_snapshot_frozen",
+                                updated_rows=updated_rows,
+                                freeze_datetime=settings.competition.freeze_datetime,
+                            )
+                        freeze_done = True
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("competition_snapshot_task_failed", error=str(exc))
 
         await asyncio.sleep(interval_seconds)
 
@@ -200,6 +242,7 @@ def create_app() -> FastAPI:
 async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.db_metrics_task = None
+    app.state.competition_snapshot_task = None
     if settings.app.enable_metrics:
         app.state.metrics = await register_metrics()
 
@@ -293,6 +336,17 @@ async def lifespan(app: FastAPI):
             lambda t: _log_task_result("db_metrics_collector", t)
         )
 
+    app.state.competition_snapshot_task = asyncio.create_task(
+        _freeze_competition_snapshot(
+            container=app.state.container,
+            interval_seconds=settings.app.metrics_db_interval_seconds,
+        ),
+        name="competition_snapshot_frozen",
+    )
+    app.state.competition_snapshot_task.add_done_callback(
+        lambda t: _log_task_result("competition_snapshot_frozen", t)
+    )
+
     yield  # ← приложение работает
 
     # ── SHUTDOWN ────────────────────────────
@@ -342,6 +396,14 @@ async def lifespan(app: FastAPI):
         metrics_task.cancel()
         try:
             await metrics_task
+        except asyncio.CancelledError:
+            pass
+
+    competition_snapshot_task = getattr(app.state, "competition_snapshot_task", None)
+    if competition_snapshot_task:
+        competition_snapshot_task.cancel()
+        try:
+            await competition_snapshot_task
         except asyncio.CancelledError:
             pass
 
