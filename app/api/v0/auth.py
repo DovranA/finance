@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -18,15 +19,15 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 def _validate_api_key(x_api_key: str | None) -> str:
     settings = get_settings()
-    expected_api_key = settings.user_management.api_key
+    expected_api_key = settings.jwt.service_api_key
 
     if not expected_api_key:
-        raise JwtConfigurationError("USER_MANAGEMENT_API_KEY is not configured")
+        raise JwtConfigurationError("JWT_SERVICE_API_KEY is not configured")
 
     if not x_api_key:
         raise JwtValidationError("missing x-api-key")
 
-    if x_api_key != expected_api_key:
+    if not hmac.compare_digest(x_api_key, expected_api_key):
         raise JwtValidationError("invalid x-api-key")
 
     return x_api_key

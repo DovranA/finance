@@ -1123,6 +1123,7 @@ class ApplyRuleUseCase:
         target_keys = actions.get("target_users") or ["user_id"]
 
         resolved: list[tuple[str, uuid.UUID]] = []
+        seen_ids: set[uuid.UUID] = set()
 
         for key in target_keys:
             raw_val = None
@@ -1143,9 +1144,14 @@ class ApplyRuleUseCase:
             except (ValueError, TypeError):
                 continue
 
-            pair = (str(key), target_id)
-            if pair not in resolved:
-                resolved.append(pair)
+            # Same physical account resolved under two different target
+            # keys (e.g. a user acting on their own post) must only be
+            # paid once — keep the earliest-declared target only.
+            if target_id in seen_ids:
+                continue
+
+            resolved.append((str(key), target_id))
+            seen_ids.add(target_id)
 
         if resolved:
             return resolved

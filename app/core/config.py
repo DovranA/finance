@@ -150,6 +150,10 @@ class JwtSettings(BaseSettings):
     algorithm: str = "HS256"
     secret_key: str = ""
     leeway_seconds: int = 0
+    # Dedicated inbound service-to-service credential (x-api-key header).
+    # Deliberately has no default — unset means the x-api-key auth path is
+    # disabled (fails closed) rather than accepting a guessable default.
+    service_api_key: str = ""
 
 
 class CompetitionSettings(BaseSettings):

@@ -23,3 +23,7 @@ class DynamicAmountValidator(ConditionValidator):
         dynamic_amount = metadata.get("dynamic_amount", "")
         if not dynamic_amount:
             raise ValueError("missed dynamic amount on metadata")
+        if isinstance(dynamic_amount, bool) or not isinstance(dynamic_amount, int):
+            raise ValueError("metadata.dynamic_amount must be a positive integer")
+        if dynamic_amount <= 0:
+            raise ValueError("metadata.dynamic_amount must be a positive integer")
