@@ -260,7 +260,11 @@ class ApplyRuleUseCase:
                             )
                             item_cache_updates.append((user_id, account))
 
-                        account.ensure_active()
+                        try:
+                            account.ensure_active()
+                        except DomainError as e:
+                            errors.append(f"Error on: {e}")
+                            continue
 
                         calc_res = await self._calculate_rule_application(
                             rule=rule,
@@ -698,7 +702,7 @@ class ApplyRuleUseCase:
             await self._condition_engine.validate(
                 rule.conditions, account=account, metadata=metadata, conn=conn
             )
-        except ValueError as e:
+        except (ValueError, DomainError) as e:
             return {"unsuccess": f"Error on: {e}"}
 
         actions = rule.actions

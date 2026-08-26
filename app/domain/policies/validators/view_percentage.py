@@ -45,7 +45,7 @@ class ViewPercentageCase:
         )
 
     def resolve(self, view_percentage: int) -> tuple[str, float]:
-        if view_percentage >= self.half_below:
+        if view_percentage >= self.full_at:
             return "full", 1.0
 
         if view_percentage < self.zero_below:
