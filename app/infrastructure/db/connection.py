@@ -24,6 +24,7 @@ async def create_pool(settings: PostgresSettings) -> Pool:
         server_settings={
             "application_name": app_name,
         },
+        statement_cache_size=0
     )
     logger.info(
         "database_pool_created",
