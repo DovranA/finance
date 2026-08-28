@@ -3,9 +3,10 @@
 import json
 import uuid
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from dishka.integrations.fastapi import FromDishka, DishkaRoute
 
+from app.api.v0.auth import require_api_key, require_jwt_bearer
 from app.api.v0.schemas.rule import (
     ApplyRuleRequest,
     BatchApplyRuleRequest,
@@ -144,27 +145,51 @@ async def delete_rule(
 async def apply_rule(
     uc: FromDishka[ApplyRuleUseCase],
     body: ApplyRuleRequest = Body(...),
+    auth: dict = Depends(require_jwt_bearer),
 ) -> dict:
-    """Apply a single active rule matching the given rule_id or event_code."""
+    """Apply a single active rule matching the given rule_id or event_code.
 
+    An end-user's own JWT can only report events about themselves: user_id
+    and role are taken from the verified token, never from the request
+    body, and dynamic_amount (unbounded, admin/service-granted rewards like
+    BONUS/COMPETITION_BONUS) is rejected outright for this caller class.
+    Only a trusted service caller (x-api-key) may act on behalf of an
+    arbitrary user_id/role or use dynamic_amount.
+    """
+    sub = auth.get("sub")
+    if sub is not None:
+        user_id = uuid.UUID(sub)
+        role = auth.get("role") or "simple"
+        if "dynamic_amount" in (body.metadata or {}):
+            raise HTTPException(
+                status_code=403,
+                detail="dynamic_amount is not allowed for user-authenticated requests",
+            )
+    else:
+        if body.user_id is None:
+            raise HTTPException(status_code=422, detail="user_id is required")
+        user_id = body.user_id
+        role = body.role
+
+    metadata = dict(body.metadata or {})
     logger.info(
         "apply rule body",
         rule_id=str(body.rule_id) if body.rule_id else None,
         event_code=body.event_code,
-        user_id=str(body.user_id),
-        metadata=body.metadata,
-        role=body.role,
+        user_id=str(user_id),
+        metadata=metadata,
+        role=role,
         event_id=str(body.event_id) if body.event_id else None,
     )
-    if body.role:
-        body.metadata["role"] = body.role
+    if role:
+        metadata["role"] = role
     if body.event_id:
-        body.metadata["event_id"] = str(body.event_id)
+        metadata["event_id"] = str(body.event_id)
     result = await uc.execute(
         rule_id=body.rule_id,
         event_code=body.event_code,
-        user_id=body.user_id,
-        metadata=body.metadata,
+        user_id=user_id,
+        metadata=metadata,
     )
     return {
         "applied_rule": result,
@@ -223,7 +248,10 @@ async def can_apply_rule(
 async def apply_rule_batch(
     uc: FromDishka[BatchApplyRuleUseCase],
     body: BatchApplyRuleRequest = Body(...),
+    _: str = Depends(require_api_key),
 ) -> BatchApplyRuleResponse:
+    """Trusted-service-only: applies rewards for a batch of *other* users,
+    so it cannot be scoped to a single caller's own JWT identity."""
     payload = [item.model_dump(exclude_none=True) for item in body.items]
     result = await uc.execute(event_code=body.event_code, items=payload)
     return BatchApplyRuleResponse(**result)

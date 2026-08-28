@@ -15,7 +15,7 @@ def test_account_creation():
 
 def test_account_default_currency():
     acc = Account.create(uuid.uuid4())
-    assert acc.currency == "TMT"
+    assert acc.currency == "TOKEN"
 
 
 def test_account_credit():

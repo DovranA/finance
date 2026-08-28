@@ -90,7 +90,10 @@ RuleLang = Literal["en", "ru", "tk"]
 
 
 class ApplyRuleRequest(BaseModel):
-    user_id: uuid.UUID
+    # Required only for trusted service (x-api-key) callers — an
+    # end-user JWT caller's own user_id/role come from the verified
+    # token instead, see app/api/v0/routes/rule.py::apply_rule.
+    user_id: Optional[uuid.UUID] = None
     event_code: Optional[str] = None
     rule_id: Optional[uuid.UUID] = None
     event_id: uuid.UUID | None = uuid.uuid4()

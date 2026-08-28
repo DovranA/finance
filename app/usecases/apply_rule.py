@@ -260,7 +260,11 @@ class ApplyRuleUseCase:
                             )
                             item_cache_updates.append((user_id, account))
 
-                        account.ensure_active()
+                        try:
+                            account.ensure_active()
+                        except DomainError as e:
+                            errors.append(f"Error on: {e}")
+                            continue
 
                         calc_res = await self._calculate_rule_application(
                             rule=rule,
@@ -698,7 +702,7 @@ class ApplyRuleUseCase:
             await self._condition_engine.validate(
                 rule.conditions, account=account, metadata=metadata, conn=conn
             )
-        except ValueError as e:
+        except (ValueError, DomainError) as e:
             return {"unsuccess": f"Error on: {e}"}
 
         actions = rule.actions
@@ -1119,6 +1123,7 @@ class ApplyRuleUseCase:
         target_keys = actions.get("target_users") or ["user_id"]
 
         resolved: list[tuple[str, uuid.UUID]] = []
+        seen_ids: set[uuid.UUID] = set()
 
         for key in target_keys:
             raw_val = None
@@ -1139,9 +1144,14 @@ class ApplyRuleUseCase:
             except (ValueError, TypeError):
                 continue
 
-            pair = (str(key), target_id)
-            if pair not in resolved:
-                resolved.append(pair)
+            # Same physical account resolved under two different target
+            # keys (e.g. a user acting on their own post) must only be
+            # paid once — keep the earliest-declared target only.
+            if target_id in seen_ids:
+                continue
+
+            resolved.append((str(key), target_id))
+            seen_ids.add(target_id)
 
         if resolved:
             return resolved
