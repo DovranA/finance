@@ -212,6 +212,14 @@ class ApplyRuleUseCase:
                 if event_id:
                     metadata["event_id"] = str(event_id)
                 metadata["event_code"] = event_code
+                if source_user_id:
+                    # id of the user who triggered the event (the actor),
+                    # as opposed to {user_id} in idempotency_pattern which
+                    # is the currently-processed *target's* id (e.g. the
+                    # post author, not the viewer) — rules that want to
+                    # dedupe a non-actor target per-actor (e.g. pay the
+                    # author once per unique viewer) reference {actor_id}.
+                    metadata["actor_id"] = str(source_user_id)
 
                 # Use savepoint for each item so database errors don't abort the entire transaction
                 item_sp = conn.transaction()
