@@ -1,0 +1,163 @@
+deployments:
+  enabled: true
+  apps:
+    finance-api:
+      replicaCount: 1
+    finance-inbox-worker:
+      replicaCount: 1
+    finance-batch-worker:
+      replicaCount: 1
+
+ingress:
+  enabled: true
+  rules:
+    finance-api:
+      enabled: true
+      annotations:
+        nginx.ingress.kubernetes.io/proxy-body-size: 5120m
+        nginx.ingress.kubernetes.io/proxy-connect-timeout: '3600'
+        nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
+        nginx.ingress.kubernetes.io/proxy-send-timeout: '3600'
+      ingressClassName: nginx
+      hosts:
+        - host: dev-finance.tmbiz.info
+          paths:
+            - path: /
+              pathType: ImplementationSpecific
+              service:
+                name: finance-api
+                port: 8000
+      tls:
+        - secretName: tls-tmbiz.info
+          hosts:
+            - dev-finance.tmbiz.info
+secrets:
+  finance-api:
+    annotations:
+      vault.security.banzaicloud.io/vault-role: "finance-59-prod"
+      vault.security.banzaicloud.io/vault-addr: "https://vault.tmbiz.info"
+      vault.security.banzaicloud.io/vault-tls-secret: "vault.tmbiz.info-tls"
+    data:
+      API_KEY: vault:applications/data/tmbiz-info/finance/app#API_KEY
+      APP_ENABLE_INBOX_CONSUMER: vault:applications/data/tmbiz-info/finance/app#APP_ENABLE_INBOX_CONSUMER
+      APP_ENV: vault:applications/data/tmbiz-info/finance/app#APP_ENV
+      APP_HOST: vault:applications/data/tmbiz-info/finance/app#APP_HOST
+      APP_LOG_LEVEL: vault:applications/data/tmbiz-info/finance/app#APP_LOG_LEVEL
+      APP_NAME: vault:applications/data/tmbiz-info/finance/app#APP_NAME
+      APP_PORT: vault:applications/data/tmbiz-info/finance/app#APP_PORT
+      BATCH_INTERVAL_SECONDS: vault:applications/data/tmbiz-info/finance/app#BATCH_INTERVAL_SECONDS
+      BATCH_SIZE: vault:applications/data/tmbiz-info/finance/app#BATCH_SIZE
+      FASTAPI_CORS_CREDENTIALS: vault:applications/data/tmbiz-info/finance/app#FASTAPI_CORS_CREDENTIALS
+      FASTAPI_CORS_ORIGINS: vault:applications/data/tmbiz-info/finance/app#FASTAPI_CORS_ORIGINS
+      GUNICORN_LOG_LEVEL: vault:applications/data/tmbiz-info/finance/app#GUNICORN_LOG_LEVEL
+      GUNICORN_TIMEOUT: vault:applications/data/tmbiz-info/finance/app#GUNICORN_TIMEOUT
+      GUNICORN_WORKERS: vault:applications/data/tmbiz-info/finance/app#GUNICORN_WORKERS
+      JWT_SECRET_KEY: vault:applications/data/tmbiz-info/finance/app#JWT_SECRET_KEY
+      JWT_SERVICE_API_KEY: vault:applications/data/tmbiz-info/finance/app#JWT_SERVICE_API_KEY
+      OUTBOX_BATCH_SIZE: vault:applications/data/tmbiz-info/finance/app#OUTBOX_BATCH_SIZE
+      OUTBOX_CLEANUP_DAYS: vault:applications/data/tmbiz-info/finance/app#OUTBOX_CLEANUP_DAYS
+      OUTBOX_CLEANUP_INTERVAL: vault:applications/data/tmbiz-info/finance/app#OUTBOX_CLEANUP_INTERVAL
+      OUTBOX_POLL_INTERVAL: vault:applications/data/tmbiz-info/finance/app#OUTBOX_POLL_INTERVAL
+      POSTGRES_DB: vault:applications/data/tmbiz-info/finance/app#POSTGRES_DB
+      POSTGRES_HOST: vault:applications/data/tmbiz-info/finance/app#POSTGRES_HOST
+      POSTGRES_PASSWORD: vault:applications/data/tmbiz-info/finance/app#POSTGRES_PASSWORD
+      POSTGRES_POOL_MAX: vault:applications/data/tmbiz-info/finance/app#POSTGRES_POOL_MAX
+      POSTGRES_POOL_MIN: vault:applications/data/tmbiz-info/finance/app#POSTGRES_POOL_MIN
+      POSTGRES_PORT: vault:applications/data/tmbiz-info/finance/app#POSTGRES_PORT
+      POSTGRES_PUBLIC_PORT: vault:applications/data/tmbiz-info/finance/app#POSTGRES_PUBLIC_PORT
+      POSTGRES_USER: vault:applications/data/tmbiz-info/finance/app#POSTGRES_USER
+      RABBITMQ_HOST: vault:applications/data/tmbiz-info/finance/app#RABBITMQ_HOST
+      RABBITMQ_PASSWORD: vault:applications/data/tmbiz-info/finance/app#RABBITMQ_PASSWORD
+      RABBITMQ_PORT: vault:applications/data/tmbiz-info/finance/app#RABBITMQ_PORT
+      RABBITMQ_USER: vault:applications/data/tmbiz-info/finance/app#RABBITMQ_USER
+      REDIS_DB_INDEX: vault:applications/data/tmbiz-info/finance/app#REDIS_DB_INDEX
+      REDIS_HOST: vault:applications/data/tmbiz-info/finance/app#REDIS_HOST
+      REDIS_PASSWORD: vault:applications/data/tmbiz-info/finance/app#REDIS_PASSWORD
+      REDIS_PORT: vault:applications/data/tmbiz-info/finance/app#REDIS_PORT
+      REDIS_USER: vault:applications/data/tmbiz-info/finance/app#REDIS_USER
+  finance-inbox-worker:
+    annotations:
+      vault.security.banzaicloud.io/vault-role: "finance-59-prod"
+      vault.security.banzaicloud.io/vault-addr: "https://vault.tmbiz.info"
+      vault.security.banzaicloud.io/vault-tls-secret: "vault.tmbiz.info-tls"
+    data:
+      API_KEY: vault:applications/data/tmbiz-info/finance/batch-worker#API_KEY
+      APP_ENABLE_INBOX_CONSUMER: vault:applications/data/tmbiz-info/finance/batch-worker#APP_ENABLE_INBOX_CONSUMER
+      APP_ENV: vault:applications/data/tmbiz-info/finance/batch-worker#APP_ENV
+      APP_HOST: vault:applications/data/tmbiz-info/finance/batch-worker#APP_HOST
+      APP_LOG_LEVEL: vault:applications/data/tmbiz-info/finance/batch-worker#APP_LOG_LEVEL
+      APP_NAME: vault:applications/data/tmbiz-info/finance/batch-worker#APP_NAME
+      APP_PORT: vault:applications/data/tmbiz-info/finance/batch-worker#APP_PORT
+      BATCH_INTERVAL_SECONDS: vault:applications/data/tmbiz-info/finance/batch-worker#BATCH_INTERVAL_SECONDS
+      BATCH_SIZE: vault:applications/data/tmbiz-info/finance/batch-worker#BATCH_SIZE
+      FASTAPI_CORS_CREDENTIALS: vault:applications/data/tmbiz-info/finance/batch-worker#FASTAPI_CORS_CREDENTIALS
+      FASTAPI_CORS_ORIGINS: vault:applications/data/tmbiz-info/finance/batch-worker#FASTAPI_CORS_ORIGINS
+      GUNICORN_LOG_LEVEL: vault:applications/data/tmbiz-info/finance/batch-worker#GUNICORN_LOG_LEVEL
+      GUNICORN_TIMEOUT: vault:applications/data/tmbiz-info/finance/batch-worker#GUNICORN_TIMEOUT
+      GUNICORN_WORKERS: vault:applications/data/tmbiz-info/finance/batch-worker#GUNICORN_WORKERS
+      JWT_SECRET_KEY: vault:applications/data/tmbiz-info/finance/batch-worker#JWT_SECRET_KEY
+      JWT_SERVICE_API_KEY: vault:applications/data/tmbiz-info/finance/batch-worker#JWT_SERVICE_API_KEY
+      OUTBOX_BATCH_SIZE: vault:applications/data/tmbiz-info/finance/batch-worker#OUTBOX_BATCH_SIZE
+      OUTBOX_CLEANUP_DAYS: vault:applications/data/tmbiz-info/finance/batch-worker#OUTBOX_CLEANUP_DAYS
+      OUTBOX_CLEANUP_INTERVAL: vault:applications/data/tmbiz-info/finance/batch-worker#OUTBOX_CLEANUP_INTERVAL
+      OUTBOX_POLL_INTERVAL: vault:applications/data/tmbiz-info/finance/batch-worker#OUTBOX_POLL_INTERVAL
+      POSTGRES_DB: vault:applications/data/tmbiz-info/finance/batch-worker#POSTGRES_DB
+      POSTGRES_HOST: vault:applications/data/tmbiz-info/finance/batch-worker#POSTGRES_HOST
+      POSTGRES_PASSWORD: vault:applications/data/tmbiz-info/finance/batch-worker#POSTGRES_PASSWORD
+      POSTGRES_POOL_MAX: vault:applications/data/tmbiz-info/finance/batch-worker#POSTGRES_POOL_MAX
+      POSTGRES_POOL_MIN: vault:applications/data/tmbiz-info/finance/batch-worker#POSTGRES_POOL_MIN
+      POSTGRES_PORT: vault:applications/data/tmbiz-info/finance/batch-worker#POSTGRES_PORT
+      POSTGRES_PUBLIC_PORT: vault:applications/data/tmbiz-info/finance/batch-worker#POSTGRES_PUBLIC_PORT
+      POSTGRES_USER: vault:applications/data/tmbiz-info/finance/batch-worker#POSTGRES_USER
+      RABBITMQ_HOST: vault:applications/data/tmbiz-info/finance/batch-worker#RABBITMQ_HOST
+      RABBITMQ_PASSWORD: vault:applications/data/tmbiz-info/finance/batch-worker#RABBITMQ_PASSWORD
+      RABBITMQ_PORT: vault:applications/data/tmbiz-info/finance/batch-worker#RABBITMQ_PORT
+      RABBITMQ_USER: vault:applications/data/tmbiz-info/finance/batch-worker#RABBITMQ_USER
+      REDIS_DB_INDEX: vault:applications/data/tmbiz-info/finance/batch-worker#REDIS_DB_INDEX
+      REDIS_HOST: vault:applications/data/tmbiz-info/finance/batch-worker#REDIS_HOST
+      REDIS_PASSWORD: vault:applications/data/tmbiz-info/finance/batch-worker#REDIS_PASSWORD
+      REDIS_PORT: vault:applications/data/tmbiz-info/finance/batch-worker#REDIS_PORT
+      REDIS_USER: vault:applications/data/tmbiz-info/finance/batch-worker#REDIS_USER
+  finance-batch-worker:
+    annotations:
+      vault.security.banzaicloud.io/vault-role: "finance-59-prod"
+      vault.security.banzaicloud.io/vault-addr: "https://vault.tmbiz.info"
+      vault.security.banzaicloud.io/vault-tls-secret: "vault.tmbiz.info-tls"
+    data:
+      API_KEY: vault:applications/data/tmbiz-info/finance/inbox-worker#API_KEY
+      APP_ENABLE_INBOX_CONSUMER: vault:applications/data/tmbiz-info/finance/inbox-worker#APP_ENABLE_INBOX_CONSUMER
+      APP_ENV: vault:applications/data/tmbiz-info/finance/inbox-worker#APP_ENV
+      APP_HOST: vault:applications/data/tmbiz-info/finance/inbox-worker#APP_HOST
+      APP_LOG_LEVEL: vault:applications/data/tmbiz-info/finance/inbox-worker#APP_LOG_LEVEL
+      APP_NAME: vault:applications/data/tmbiz-info/finance/inbox-worker#APP_NAME
+      APP_PORT: vault:applications/data/tmbiz-info/finance/inbox-worker#APP_PORT
+      BATCH_INTERVAL_SECONDS: vault:applications/data/tmbiz-info/finance/inbox-worker#BATCH_INTERVAL_SECONDS
+      BATCH_SIZE: vault:applications/data/tmbiz-info/finance/inbox-worker#BATCH_SIZE
+      FASTAPI_CORS_CREDENTIALS: vault:applications/data/tmbiz-info/finance/inbox-worker#FASTAPI_CORS_CREDENTIALS
+      FASTAPI_CORS_ORIGINS: vault:applications/data/tmbiz-info/finance/inbox-worker#FASTAPI_CORS_ORIGINS
+      GUNICORN_LOG_LEVEL: vault:applications/data/tmbiz-info/finance/inbox-worker#GUNICORN_LOG_LEVEL
+      GUNICORN_TIMEOUT: vault:applications/data/tmbiz-info/finance/inbox-worker#GUNICORN_TIMEOUT
+      GUNICORN_WORKERS: vault:applications/data/tmbiz-info/finance/inbox-worker#GUNICORN_WORKERS
+      JWT_SECRET_KEY: vault:applications/data/tmbiz-info/finance/inbox-worker#JWT_SECRET_KEY
+      JWT_SERVICE_API_KEY: vault:applications/data/tmbiz-info/finance/inbox-worker#JWT_SERVICE_API_KEY
+      OUTBOX_BATCH_SIZE: vault:applications/data/tmbiz-info/finance/inbox-worker#OUTBOX_BATCH_SIZE
+      OUTBOX_CLEANUP_DAYS: vault:applications/data/tmbiz-info/finance/inbox-worker#OUTBOX_CLEANUP_DAYS
+      OUTBOX_CLEANUP_INTERVAL: vault:applications/data/tmbiz-info/finance/inbox-worker#OUTBOX_CLEANUP_INTERVAL
+      OUTBOX_POLL_INTERVAL: vault:applications/data/tmbiz-info/finance/inbox-worker#OUTBOX_POLL_INTERVAL
+      POSTGRES_DB: vault:applications/data/tmbiz-info/finance/inbox-worker#POSTGRES_DB
+      POSTGRES_HOST: vault:applications/data/tmbiz-info/finance/inbox-worker#POSTGRES_HOST
+      POSTGRES_PASSWORD: vault:applications/data/tmbiz-info/finance/inbox-worker#POSTGRES_PASSWORD
+      POSTGRES_POOL_MAX: vault:applications/data/tmbiz-info/finance/inbox-worker#POSTGRES_POOL_MAX
+      POSTGRES_POOL_MIN: vault:applications/data/tmbiz-info/finance/inbox-worker#POSTGRES_POOL_MIN
+      POSTGRES_PORT: vault:applications/data/tmbiz-info/finance/inbox-worker#POSTGRES_PORT
+      POSTGRES_PUBLIC_PORT: vault:applications/data/tmbiz-info/finance/inbox-worker#POSTGRES_PUBLIC_PORT
+      POSTGRES_USER: vault:applications/data/tmbiz-info/finance/inbox-worker#POSTGRES_USER
+      RABBITMQ_HOST: vault:applications/data/tmbiz-info/finance/inbox-worker#RABBITMQ_HOST
+      RABBITMQ_PASSWORD: vault:applications/data/tmbiz-info/finance/inbox-worker#RABBITMQ_PASSWORD
+      RABBITMQ_PORT: vault:applications/data/tmbiz-info/finance/inbox-worker#RABBITMQ_PORT
+      RABBITMQ_USER: vault:applications/data/tmbiz-info/finance/inbox-worker#RABBITMQ_USER
+      REDIS_DB_INDEX: vault:applications/data/tmbiz-info/finance/inbox-worker#REDIS_DB_INDEX
+      REDIS_HOST: vault:applications/data/tmbiz-info/finance/inbox-worker#REDIS_HOST
+      REDIS_PASSWORD: vault:applications/data/tmbiz-info/finance/inbox-worker#REDIS_PASSWORD
+      REDIS_PORT: vault:applications/data/tmbiz-info/finance/inbox-worker#REDIS_PORT
+      REDIS_USER: vault:applications/data/tmbiz-info/finance/inbox-worker#REDIS_USER
