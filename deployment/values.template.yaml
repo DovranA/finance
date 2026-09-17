@@ -88,15 +88,19 @@ secrets:
       POSTGRES_POOL_MIN: vault:production/data/tmbiz-info/finance/app#POSTGRES_POOL_MIN
       POSTGRES_PORT: vault:production/data/tmbiz-info/finance/app#POSTGRES_PORT
       POSTGRES_USER: vault:production/data/tmbiz-info/finance/app#POSTGRES_USER
+      RABBITMQ_CLUSTER_ADDRS: vault:production/data/tmbiz-info/finance/app#RABBITMQ_CLUSTER_ADDRS
       RABBITMQ_HOST: vault:production/data/tmbiz-info/finance/app#RABBITMQ_HOST
       RABBITMQ_PASSWORD: vault:production/data/tmbiz-info/finance/app#RABBITMQ_PASSWORD
       RABBITMQ_PORT: vault:production/data/tmbiz-info/finance/app#RABBITMQ_PORT
       RABBITMQ_USER: vault:production/data/tmbiz-info/finance/app#RABBITMQ_USER
-      REDIS_DB: vault:production/data/tmbiz-info/finance/app#REDIS_DB
-      REDIS_HOST: vault:production/data/tmbiz-info/finance/app#REDIS_HOST
-      REDIS_PASSWORD: vault:production/data/tmbiz-info/finance/app#REDIS_PASSWORD
-      REDIS_PORT: vault:production/data/tmbiz-info/finance/app#REDIS_PORT
-      USER_MANAGEMENT_API_KEY: vault:production/data/tmbiz-info/finance/app#USER_MANAGEMENT_API_KEY
+      REDIS_CLUSTER_ADDR: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_CLUSTER_ADDR
+      REDIS_DB: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_DB
+      REDIS_HOST: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_HOST
+      REDIS_PASSWORD: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_PASSWORD
+      REDIS_PORT: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_PORT
+      USER_MANAGEMENT_ENDPOINT: vault:production/data/tmbiz-info/finance/batch-worker#USER_MANAGEMENT_ENDPOINT
+      USER_MANAGEMENT_API_KEY: vault:production/data/tmbiz-info/finance/batch-worker#USER_MANAGEMENT_API_KEY
+      USER_MANAGEMENT_USERS_LOOKUP_PATH: vault:production/data/tmbiz-info/finance/batch-worker#USER_MANAGEMENT_USERS_LOOKUP_PATH
   finance-inbox-worker:
     annotations:
       vault.security.banzaicloud.io/vault-role: "finance-59-prod"
@@ -114,10 +118,12 @@ secrets:
       POSTGRES_POOL_MIN: vault:production/data/tmbiz-info/finance/inbox-worker#POSTGRES_POOL_MIN
       POSTGRES_PORT: vault:production/data/tmbiz-info/finance/inbox-worker#POSTGRES_PORT
       POSTGRES_USER: vault:production/data/tmbiz-info/finance/inbox-worker#POSTGRES_USER
+      RABBITMQ_CLUSTER_ADDRS: vault:production/data/tmbiz-info/finance/inbox-worker#RABBITMQ_CLUSTER_ADDRS
       RABBITMQ_HOST: vault:production/data/tmbiz-info/finance/inbox-worker#RABBITMQ_HOST
       RABBITMQ_PASSWORD: vault:production/data/tmbiz-info/finance/inbox-worker#RABBITMQ_PASSWORD
       RABBITMQ_PORT: vault:production/data/tmbiz-info/finance/inbox-worker#RABBITMQ_PORT
       RABBITMQ_USER: vault:production/data/tmbiz-info/finance/inbox-worker#RABBITMQ_USER
+      
   finance-batch-worker:
     annotations:
       vault.security.banzaicloud.io/vault-role: "finance-59-prod"
@@ -139,11 +145,14 @@ secrets:
       POSTGRES_POOL_MIN: vault:production/data/tmbiz-info/finance/batch-worker#POSTGRES_POOL_MIN
       POSTGRES_PORT: vault:production/data/tmbiz-info/finance/batch-worker#POSTGRES_PORT
       POSTGRES_USER: vault:production/data/tmbiz-info/finance/batch-worker#POSTGRES_USER
+      REDIS_CLUSTER_ADDR: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_CLUSTER_ADDR
       REDIS_DB: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_DB
       REDIS_HOST: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_HOST
       REDIS_PASSWORD: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_PASSWORD
       REDIS_PORT: vault:production/data/tmbiz-info/finance/batch-worker#REDIS_PORT
+      USER_MANAGEMENT_ENDPOINT: vault:production/data/tmbiz-info/finance/batch-worker#USER_MANAGEMENT_ENDPOINT
       USER_MANAGEMENT_API_KEY: vault:production/data/tmbiz-info/finance/batch-worker#USER_MANAGEMENT_API_KEY
+      USER_MANAGEMENT_USERS_LOOKUP_PATH: vault:production/data/tmbiz-info/finance/batch-worker#USER_MANAGEMENT_USERS_LOOKUP_PATH
   tls-tmbiz.info:
     type: kubernetes.io/tls
     data:
