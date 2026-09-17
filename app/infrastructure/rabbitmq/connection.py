@@ -14,15 +14,26 @@ logger = get_logger(__name__)
 
 
 async def create_connection(settings: RabbitMQSettings) -> RobustConnection:
-    """Create a robust (auto-reconnecting) RabbitMQ connection."""
-    connection = await aio_pika.connect_robust(settings.url)
-    logger.info(
-        "rabbitmq_connected",
-        host=settings.host,
-        port=settings.port,
-        vhost=settings.vhost,
-    )
-    return connection
+    """Create a robust (auto-reconnecting) RabbitMQ connection.
+
+    Tries each RABBITMQ_CLUSTER_ADDRS node in order, connecting to the first
+    that accepts. aio-pika's robust reconnect then keeps retrying that same
+    node — it doesn't fail over to another node if that one goes down after
+    a successful connect.
+    # ponytail: connect-time failover only; add per-node retry in the
+    # reconnect loop if losing a node mid-run must also fail over.
+    """
+    last_exc: Exception | None = None
+    for url in settings.urls:
+        try:
+            connection = await aio_pika.connect_robust(url)
+        except Exception as exc:  # noqa: BLE001 — try the next node
+            last_exc = exc
+            logger.warning("rabbitmq_connect_failed", url=url, error=str(exc))
+            continue
+        logger.info("rabbitmq_connected", url=url, vhost=settings.vhost)
+        return connection
+    raise last_exc
 
 
 async def create_channel(

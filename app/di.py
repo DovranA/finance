@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import AsyncIterable
 
 import redis.asyncio as redis
+from redis.asyncio.cluster import RedisCluster
 from asyncpg import Pool
 from dishka import Provider, Scope, provide, make_async_container, AsyncContainer
 
@@ -89,7 +90,9 @@ class InfrastructureProvider(Provider):
         await close_pool(pool)
 
     @provide
-    async def get_redis(self, settings: Settings) -> AsyncIterable[redis.Redis | None]:
+    async def get_redis(
+        self, settings: Settings
+    ) -> AsyncIterable[redis.Redis | RedisCluster | None]:
         try:
             client = await create_redis_pool(settings.redis)
         except Exception:
@@ -101,7 +104,7 @@ class InfrastructureProvider(Provider):
         await close_redis(client)
 
     @provide
-    def get_cache(self, client: redis.Redis | None) -> CacheService | None:
+    def get_cache(self, client: redis.Redis | RedisCluster | None) -> CacheService | None:
         return CacheService(client) if client else None
 
     @provide
