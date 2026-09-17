@@ -169,3 +169,4 @@ command.md
 prometheus.yml
 debezium.properties
 /.github
+*.example

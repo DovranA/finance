@@ -28,10 +28,3 @@ RUN chown -R appuser:appuser /app
 # Switch to non-root user
 USER appuser
 
-# Default: run the API server
-ENV APP_HOST=0.0.0.0
-ENV APP_PORT=8000
-
-EXPOSE 8000
-
-CMD ["gunicorn", "-c", "python:app.infrastructure.gunicorn.config", "app.main:app"]

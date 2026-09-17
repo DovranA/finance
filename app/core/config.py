@@ -118,7 +118,7 @@ class AppSettings(BaseSettings):
     enable_user_registered_consumer: bool = True
     enable_user_deleted_consumer: bool = True
     enable_user_blocked_consumer: bool = True
-    enable_metrics: bool = True
+    enable_metrics: bool = False
     metrics_port: int | None = None
     metrics_db_interval_seconds: float = 5.0
 
@@ -158,7 +158,7 @@ class RestApiSettings(BaseSettings):
 class UserManagementSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="USER_MANAGEMENT_")
 
-    endpoint: str = "https://kong.tmbiz.info/public/user-management"
+    endpoint: str = ""
     api_key: str = "apikey"
     users_lookup_path: str = "/api/v0/users/lookup"
     timeout_seconds: float = 10.0
