@@ -11,6 +11,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 
+def _parse_cluster_addrs(addrs: str) -> list[tuple[str, int]]:
+    """Parse "ip:port,ip:port" into [(ip, port), ...]."""
+    nodes = []
+    for addr in addrs.split(","):
+        host, port = addr.strip().split(":")
+        nodes.append((host, int(port)))
+    return nodes
+
+
 class PostgresSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="POSTGRES_")
 
@@ -60,13 +69,18 @@ class RabbitMQSettings(BaseSettings):
     queue_user_deleted: str = "user.deleted:update.finance"
     queue_user_blocked: str = "user.reported:update.finance"
     prefetch_count: int = 100
+    cluster_addrs: str = ""  # "ip:port,ip:port" — overrides host/port when set
 
     @property
-    def url(self) -> str:
-        return (
-            f"amqp://{self.user}:{self.password}"
-            f"@{self.host}:{self.port}/{self.vhost}"
-        )
+    def urls(self) -> list[str]:
+        """One AMQP URL per cluster node, or a single-item list from host/port."""
+        nodes = _parse_cluster_addrs(self.cluster_addrs) if self.cluster_addrs else [
+            (self.host, self.port)
+        ]
+        return [
+            f"amqp://{self.user}:{self.password}@{host}:{port}/{self.vhost}"
+            for host, port in nodes
+        ]
 
 
 class RedisSettings(BaseSettings):
@@ -77,6 +91,13 @@ class RedisSettings(BaseSettings):
     db: int = 0
     password: str = ""
     pool_size: int = 20
+    cluster_addrs: str = ""  # "ip:port,ip:port" — overrides host/port when set
+
+    @property
+    def nodes(self) -> list[tuple[str, int]]:
+        if not self.cluster_addrs:
+            return [(self.host, self.port)]
+        return _parse_cluster_addrs(self.cluster_addrs)
 
     @property
     def url(self) -> str:

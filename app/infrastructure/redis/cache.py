@@ -7,6 +7,7 @@ from typing import Any
 
 import orjson
 import redis.asyncio as redis
+from redis.asyncio.cluster import RedisCluster
 
 from app.core.logging import get_logger
 
@@ -27,7 +28,7 @@ class CacheService:
     Redis is NOT the source of truth — always falls back to DB.
     """
 
-    def __init__(self, client: redis.Redis) -> None:
+    def __init__(self, client: redis.Redis | RedisCluster) -> None:
         self._redis = client
 
     # ── Economic Config Cache ────────────────────────────
